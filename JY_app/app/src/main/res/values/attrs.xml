@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="JoystickView">
+        <attr name="joystick_color" format="color" />
+        <attr name="joystick_background_color" format="color" />
+        <attr name="baseColor" format="color" />
+        <attr name="joyColor" format="color" />
+    </declare-styleable>
+</resources>

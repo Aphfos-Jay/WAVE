@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- ✅ 카메라 프리뷰 (배경) -->
+    <androidx.camera.view.PreviewView
+        android:id="@+id/cameraPreview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center"
+        app:implementationMode="performance" />
+
+    <!-- ✅ 리모컨 UI (투명 오버레이) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:background="@android:color/transparent"
+        android:padding="16dp">
+
+        <!-- 왼쪽: 조이스틱 + 상태 -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:background="@android:color/transparent">
+
+            <com.example.remote.JoystickView
+                android:id="@+id/joystickView"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="16dp" />
+
+            <TextView
+                android:id="@+id/joystickStatusTextView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="📡 현재 상태: 대기 중"
+                android:textSize="16sp"
+                android:gravity="center"
+                android:layout_marginTop="8dp"
+                android:background="@android:color/transparent" />
+        </LinearLayout>
+
+        <!-- 오른쪽: 버튼 패널 -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:layout_marginStart="16dp"
+            android:background="@android:color/transparent">
+
+            <!-- 캡처 버튼 -->
+            <Button
+                android:id="@+id/captureButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="📷 캡처"
+                android:textSize="18sp"
+                android:backgroundTint="#6200EE"
+                android:textColor="#FFFFFF"
+                android:layout_marginBottom="16dp" />
+
+            <!-- D-Pad -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:background="@android:color/transparent">
+
+                <!-- 위 -->
+                <Button
+                    android:id="@+id/upButton"
+                    android:layout_width="60dp"
+                    android:layout_height="60dp"
+                    android:text="↑"
+                    android:textSize="24sp"
+                    android:backgroundTint="#6200EE"
+                    android:textColor="#FFFFFF"
+                    android:layout_marginBottom="8dp" />
+
+                <!-- 좌, 중앙, 우 -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:background="@android:color/transparent">
+
+                    <Button
+                        android:id="@+id/leftButton"
+                        android:layout_width="60dp"
+                        android:layout_height="60dp"
+                        android:text="←"
+                        android:textSize="24sp"
+                        android:backgroundTint="#6200EE"
+                        android:textColor="#FFFFFF"
+                        android:layout_marginEnd="8dp" />
+
+                    <Button
+                        android:id="@+id/centerButton"
+                        android:layout_width="60dp"
+                        android:layout_height="60dp"
+                        android:text="⦿"
+                        android:textSize="24sp"
+                        android:backgroundTint="#6200EE"
+                        android:textColor="#FFFFFF"
+                        android:layout_marginHorizontal="8dp" />
+
+                    <Button
+                        android:id="@+id/rightButton"
+                        android:layout_width="60dp"
+                        android:layout_height="60dp"
+                        android:text="→"
+                        android:textSize="24sp"
+                        android:backgroundTint="#6200EE"
+                        android:textColor="#FFFFFF"
+                        android:layout_marginStart="8dp" />
+                </LinearLayout>
+
+                <!-- 아래 -->
+                <Button
+                    android:id="@+id/downButton"
+                    android:layout_width="60dp"
+                    android:layout_height="60dp"
+                    android:text="↓"
+                    android:textSize="24sp"
+                    android:backgroundTint="#6200EE"
+                    android:textColor="#FFFFFF"
+                    android:layout_marginTop="8dp" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

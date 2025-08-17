@@ -1,0 +1,10 @@
+<resources>
+    <!-- (선택사항) 이름을 다르게 하여 유지할 수도 있음 -->
+    <!--
+    <style name="Theme.Remote.AppCompat" parent="Theme.AppCompat.Light.DarkActionBar">
+        <item name="colorPrimary">@color/purple_500</item>
+        <item name="colorPrimaryDark">@color/purple_700</item>
+        <item name="colorAccent">@color/teal_200</item>
+    </style>
+    -->
+</resources>
