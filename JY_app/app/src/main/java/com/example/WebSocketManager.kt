@@ -7,107 +7,76 @@ import okhttp3.*
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
-class WebSocketManager {
+class WebSocketManager private constructor() {
 
     private var webSocket: WebSocket? = null
-    private var eventCallback: ((type: String, content: String) -> Unit)? = null
-    private val client = OkHttpClient.Builder()
-        .readTimeout(0, TimeUnit.SECONDS)
-        .build()
+    private val listeners = mutableListOf<(type: String, content: String) -> Unit>()
+    private val client = OkHttpClient.Builder().readTimeout(0, TimeUnit.SECONDS).build()
     private val handler = Handler(Looper.getMainLooper())
 
     companion object {
+        @Volatile private var instance: WebSocketManager? = null
+        fun getInstance(): WebSocketManager =
+            instance ?: synchronized(this) { instance ?: WebSocketManager().also { instance = it } }
+
         private var SERVER_IP = "192.168.137.1"
         private const val SERVER_PORT = 8080
-        private const val CLIENT_ID = "android_client_1"
-        private const val MAX_RETRIES = 3
-        private const val RETRY_DELAY_MS = 1000L
+        private var CLIENT_ID = "android_client_1"
 
-        // 🔧 WS_URL을 고정값 대신 함수로 만듦
-        private fun buildWsUrl(): String {
-            return "ws://$SERVER_IP:$SERVER_PORT/ws/agent/$CLIENT_ID"
-        }
-    }
+        fun setClientId(id: String) { CLIENT_ID = id }
+        fun setServerIp(ip: String) { SERVER_IP = ip }
 
-    fun setServerIp(ip: String) {
-        SERVER_IP = ip
+        private fun buildWsUrl() = "ws://$SERVER_IP:$SERVER_PORT/ws/agent/$CLIENT_ID"
     }
 
     fun isConnected(): Boolean = webSocket != null
 
     fun connect() {
-        Thread {
-            var attempt = 0
-            while (attempt < MAX_RETRIES && webSocket == null) {
-                attempt++
-                try {
-                    val request = Request.Builder().url(buildWsUrl()).build()
-                    val listener = object : WebSocketListener() {
-                        override fun onOpen(webSocket: WebSocket, response: Response) {
-                            Log.i("WebSocket", "✅ Connection successful: ${buildWsUrl()}")
-                            this@WebSocketManager.webSocket = webSocket
-                        }
+        if (isConnected()) { Log.w("WebSocket","already connected"); return }
+        val request = Request.Builder().url(buildWsUrl()).build()
+        client.newWebSocket(request, object : WebSocketListener() {
+            override fun onOpen(ws: WebSocket, r: Response) { webSocket = ws; Log.i("WebSocket","open") }
 
-                        override fun onMessage(webSocket: WebSocket, text: String) {
-                            Log.i("WebSocket", "📥 Message received: $text")
-                            try {
-                                val json = JSONObject(text)
-                                val type = json.optString("type")
-                                val content = json.optString("content")
-                                handler.post { eventCallback?.invoke(type, content) }
-                            } catch (e: Exception) {
-                                Log.e("WebSocket", "❌ JSON parsing failed: ${e.message}")
-                            }
-                        }
+            // ▼▼▼ [수정] 메시지 파싱 로직 변경 ▼▼▼
+            override fun onMessage(ws: WebSocket, text: String) {
+                runCatching {
+                    val j = JSONObject(text)
+                    // "Type" 키를 먼저 찾고, 없으면 옛날 "type" 키를 찾도록 수정
+                    val type = j.optString("Type", j.optString("type"))
+                    var content = ""
 
-                        override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-                            Log.e("WebSocket", "❌ Connection failed: ${t.message}")
-                        }
-
-                        override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                            Log.w("WebSocket", "🔌 Connection closed: $reason ($code)")
-                            this@WebSocketManager.webSocket = null
-                        }
+                    // [핵심 수정] Tts 타입일 경우 "Text" 키에서 내용을 가져오도록 처리
+                    if (type == "Tts") {
+                        content = j.optString("Text")
+                    } else {
+                        // 그 외의 경우에는 기존 로직 유지
+                        content = j.optString("Content", j.optString("content", j.toString()))
                     }
-                    client.newWebSocket(request, listener)
-                    if (webSocket != null) break
-                    Log.w("WebSocket", "🔄 Retry attempt $attempt of $MAX_RETRIES")
-                    Thread.sleep(RETRY_DELAY_MS)
-                } catch (e: Exception) {
-                    Log.e("WebSocket", "❌ Connection attempt $attempt failed: ${e.message}")
-                    if (attempt == MAX_RETRIES) handler.post { throw e }
-                }
+
+                    handler.post { listeners.forEach { it(type, content) } }
+                }.onFailure { Log.e("WebSocket","bad json", it) }
             }
-        }.start()
+
+
+            override fun onFailure(ws: WebSocket, t: Throwable, r: Response?) { webSocket = null; Log.e("WebSocket","fail", t) }
+            override fun onClosed(ws: WebSocket, code: Int, reason: String) { webSocket = null; Log.w("WebSocket","closed $code $reason") }
+        })
     }
+
     fun sendText(text: String) {
-        if (webSocket == null) {
-            Log.w("WebSocket", "⚠️ No active connection, data not sent: $text")
-            return
-        }
+        if (!isConnected()) { Log.w("WebSocket","not connected"); return }
         webSocket?.send(text)
-        Log.d("WebSocket", "📤 Joystick data sent: $text")
     }
 
+    // sendCommand는 이제 사용하지 않으므로 삭제하거나 주석 처리해도 좋습니다.
     fun sendCommand(command: String) {
-        if (webSocket == null) {
-            Log.w("WebSocket", "⚠️ No active connection, command not sent: $command")
-            return
-        }
-        val json = JSONObject().apply {
-            put("type", "button")
-            put("content", command)
-        }
-        Log.d("WebSocket", "📤 [sendCommand] 실제 전송: $json")
-        webSocket?.send(json.toString())
-    }
-    fun setOnEventListener(callback: (type: String, content: String) -> Unit) {
-        this.eventCallback = callback
+        // 이 함수는 옛날 형식을 보냅니다. JsonFactory 사용을 권장합니다.
+        val json = JSONObject().apply { put("type","button"); put("content", command) }
+        sendText(json.toString())
     }
 
-    fun disconnect() {
-        webSocket?.close(1000, "User disconnected")
-        client.dispatcher.executorService.shutdown()
-        webSocket = null
-    }
+    fun addEventListener(l: (String,String)->Unit) { if (!listeners.contains(l)) listeners.add(l) }
+    fun removeEventListener(l: (String,String)->Unit) { listeners.remove(l) }
+
+    fun disconnect() { webSocket?.close(1000, "bye"); webSocket = null }
 }

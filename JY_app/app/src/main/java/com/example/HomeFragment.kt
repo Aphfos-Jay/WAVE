@@ -63,10 +63,28 @@ class HomeFragment : Fragment() {
         }
 
         sttButton.setOnClickListener {
-            val intent = Intent(requireContext(), PorcupineService::class.java).apply {
-                action = PorcupineService.ACTION_START_STT
-            }
-            ContextCompat.startForegroundService(requireContext(), intent)
+            PermissionUtils.ensureMicPermissionOrRequest(
+                activity = requireActivity(),
+                onGranted = {
+                    // 서비스가 아직 안 떠 있었다면 먼저 띄우고
+                    ContextCompat.startForegroundService(
+                        requireContext(),
+                        Intent(requireContext(), PorcupineService::class.java).apply {
+                            action = PorcupineService.ACTION_START_FOREGROUND_SERVICE
+                        }
+                    )
+                    // 그 다음 STT 시작
+                    ContextCompat.startForegroundService(
+                        requireContext(),
+                        Intent(requireContext(), PorcupineService::class.java).apply {
+                            action = PorcupineService.ACTION_START_STT
+                        }
+                    )
+                },
+                onDenied = {
+                    appendStatus("🎤 마이크 권한이 필요합니다.")
+                }
+            )
         }
 
         clearLogButton.setOnClickListener {

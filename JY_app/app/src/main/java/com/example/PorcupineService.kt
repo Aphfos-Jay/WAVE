@@ -15,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import ai.picovoice.porcupine.PorcupineManager
 import kotlinx.coroutines.*
+import org.json.JSONObject
 import java.util.*
 import java.io.File
 import java.io.FileOutputStream
@@ -22,12 +23,11 @@ import java.io.FileOutputStream
 class PorcupineService : Service() {
 
     private var porcupineManager: PorcupineManager? = null
-    private lateinit var tts: TextToSpeech
-    private lateinit var speechRecognizer: SpeechRecognizer
+    private var tts: TextToSpeech? = null
+    private var speechRecognizer: SpeechRecognizer? = null
     private lateinit var recognizerIntent: Intent
     private lateinit var wsManager: WebSocketManager
 
-    // ▶ 서비스 수명에 묶이는 코루틴 스코프 (GlobalScope 사용 X)
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     companion object {
@@ -46,59 +46,94 @@ class PorcupineService : Service() {
         const val EXTRA_LOG_CONTENT = "log_content"
     }
 
+    // ---------------------------
+    // 모드 유틸
+    // ---------------------------
+    private fun getAppMode(): String {
+        val prefs = getSharedPreferences(MainActivity.PREFS, MODE_PRIVATE)
+        return prefs.getString(MainActivity.KEY_MODE, "controller") ?: "controller"
+    }
+    private fun isRc(): Boolean = getAppMode() == "rc"
+    private fun isController(): Boolean = !isRc()
+    private fun shouldSpeak(): Boolean = isRc()
+
+    private val serviceWsListener: (type: String, content: String) -> Unit = { type, content ->
+        when (type) {
+            "Tts", "response" -> { // 이전/이후 형식 모두 수신
+                if (shouldSpeak()) speakOut(content)
+                sendStatus("⬅️ 서버 응답: $content")
+                logConversation("서버 응답", content)
+            }
+            "error" -> {
+                sendStatus("❗️ 서버 오류: $content")
+                logConversation("서버 오류", content)
+            }
+        }
+    }
+
+
+    // ---------------------------
+
     override fun onCreate() {
         super.onCreate()
         initNotification()
         initTextToSpeech()
-        initSpeechRecognizer()
-        initPorcupine()
-        wsManager = WebSocketManager()
-        wsManager.connect()
 
-        wsManager.setOnEventListener { type, content ->
-            when (type) {
-                "response" -> {
-                    speakOut(content)
-                    sendStatus("⬅️ 서버 응답: $content")
-                    logConversation("서버 응답", content)
-                }
-                "error" -> {
-                    sendStatus("❗️ 서버 오류: $content")
-                    logConversation("서버 오류", content)
-                }
-            }
+        wsManager = WebSocketManager.getInstance()
+        wsManager.addEventListener(serviceWsListener) // 서비스의 리스너 등록
+
+        if (isController()) {
+            initSpeechRecognizer()
+            initPorcupine()
+            sendStatus("🎮 조종기 모드: 호출어/음성 인식 활성")
+        } else {
+            sendStatus("🤖 RC 모드: TTS 전담, 호출어/음성 인식 비활성")
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_START_FOREGROUND_SERVICE -> startForegroundNotification("호출어 인식 중...")
+            ACTION_START_FOREGROUND_SERVICE -> startForegroundNotification("호출어 인식 준비 중...")
             ACTION_STOP_FOREGROUND_SERVICE -> {
                 stopSTT()
                 stopForeground(Service.STOP_FOREGROUND_REMOVE)
                 stopSelf()
             }
             ACTION_START_STT -> {
-                porcupineManager?.stop()  // 수동 요청 시 마이크 점유 해제
-                startSTT()
+                if (isController()) {
+                    porcupineManager?.stop()
+                    startSTT()
+                } else {
+                    sendStatus("RC 모드에서는 STT가 비활성입니다.")
+                }
             }
             ACTION_STOP_STT -> stopSTT()
-            ACTION_SPEAK_OUT -> intent.getStringExtra(EXTRA_TEXT_TO_SPEAK)?.let { speakOut(it) }
+            ACTION_SPEAK_OUT -> {
+                val text = intent.getStringExtra(EXTRA_TEXT_TO_SPEAK)
+                if (text != null && shouldSpeak()) speakOut(text)
+            }
         }
         return START_STICKY
     }
 
     override fun onDestroy() {
+        wsManager.removeEventListener(serviceWsListener) // 리스너 해제
         stopSTT()
         porcupineManager?.delete()
-        tts.shutdown()
-        speechRecognizer.destroy()
-        serviceScope.cancel() // ▶ 코루틴 정리
+        porcupineManager = null
+        tts?.shutdown()
+        tts = null
+        speechRecognizer?.destroy()
+        speechRecognizer = null
+        serviceScope.cancel()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    // ---------------------------
+    // Foreground Notification
+    // ---------------------------
     private fun initNotification() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel("voice_channel", "Voice Service", NotificationManager.IMPORTANCE_LOW)
@@ -118,45 +153,43 @@ class PorcupineService : Service() {
         startForeground(1, notification)
     }
 
+    // ---------------------------
+    // TTS
+    // ---------------------------
     private fun initTextToSpeech() {
         tts = TextToSpeech(this) {
             if (it != TextToSpeech.SUCCESS) log("TTS 초기화 실패")
-        }
-        tts.language = Locale.KOREAN
-
-        tts.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-            override fun onDone(utteranceId: String?) {
-                when (utteranceId) {
-                    "utterance_tts" -> porcupineManager?.start()
-                    "utterance_hotword" -> {
-                        Handler(Looper.getMainLooper()).postDelayed({
-                            startSTT()
-                        }, 300)  // 300ms 후 STT 시작
+        }.apply {
+            this?.language = Locale.KOREAN
+            this?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onDone(utteranceId: String?) {
+                    if (utteranceId == "utterance_tts" && isController()) {
+                        porcupineManager?.start()
                     }
-
-
                 }
-            }
-
-            override fun onError(utteranceId: String?) {
-                log("TTS 오류 발생: $utteranceId")
-            }
-
-            override fun onStart(utteranceId: String?) {
-                log("TTS 시작됨: $utteranceId")
-            }
-        })
+                override fun onError(utteranceId: String?) { log("TTS 오류 발생: $utteranceId") }
+                override fun onStart(utteranceId: String?) { log("TTS 시작됨: $utteranceId") }
+            })
+        }
     }
 
     private fun speakOut(text: String, utteranceId: String? = "utterance_tts") {
-        val params = Bundle().apply {
-            putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
+        if (shouldSpeak()) {
+            val params = Bundle().apply {
+                putString(TextToSpeech.Engine.KEY_PARAM_UTTERANCE_ID, utteranceId)
+            }
+            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
+            logConversation("TTS", text)
+            sendStatus("🔊 $text")
+        } else if (isController()) {
+            // ▼▼▼ JsonFactory 사용 ▼▼▼
+            wsManager.sendText(JsonFactory.createTtsRequestMessage(text))
         }
-        tts.speak(text, TextToSpeech.QUEUE_FLUSH, params, utteranceId)
-        logConversation("TTS", text)
-        sendStatus("🔊 $text")
     }
 
+    // ---------------------------
+    // Porcupine (조종기 전용)
+    // ---------------------------
     private fun initPorcupine() {
         try {
             val keywordPath = getAssetFilePath("hi_porsche_android.ppn")
@@ -172,7 +205,13 @@ class PorcupineService : Service() {
                     logConversation("Hotword", "호출어가 감지되었습니다")
 
                     porcupineManager?.stop()
-                    speakOut("네 말씀하세요", "utterance_hotword")
+
+                    if (isController()) {
+                        speakOut("네, 말씀하세요") // RC가 말하도록 서버에 요청
+                        Handler(Looper.getMainLooper()).postDelayed({
+                            startSTT() // 0.5초 후 STT 시작
+                        }, 500)
+                    }
                 }
 
             porcupineManager?.start()
@@ -181,6 +220,9 @@ class PorcupineService : Service() {
         }
     }
 
+    // ---------------------------
+    // STT (조종기 전용)
+    // ---------------------------
     private fun initSpeechRecognizer() {
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
         recognizerIntent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -192,7 +234,7 @@ class PorcupineService : Service() {
             putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 1000L)
             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         }
-        speechRecognizer.setRecognitionListener(object : RecognitionListener {
+        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
             override fun onReadyForSpeech(params: Bundle?) {
                 sendStatus("🎤 음성 인식 준비됨")
                 Log.d("PorcupineService", "STT: onReadyForSpeech 호출됨")
@@ -207,23 +249,15 @@ class PorcupineService : Service() {
                 logConversation("STT 결과", recognizedText)
 
                 // ▶ 서버로 전송 (연결 준비될 때까지 재시도)
-                val payload = org.json.JSONObject().apply {
-                    put("type", "command")
-                    put("content", recognizedText)
-                }
-                sendWhenReady(payload.toString())
+                val payload = JsonFactory.createSttMessage(recognizedText)
+                sendWhenReady(payload)
 
                 sendStatus("⬆️ 서버로 전송: $recognizedText")
                 sendBroadcast(Intent("com.example.remote.STT_ENDED"))
-
-                // ✅ STT가 정상 종료된 뒤 Porcupine 재시작 (약간의 딜레이로 마이크 충돌 회피)
                 Handler(Looper.getMainLooper()).postDelayed({
                     try {
                         porcupineManager?.start()
-                        sendStatus("🟢 호출어 대기 재개")
-                    } catch (e: Exception) {
-                        sendStatus("❌ 호출어 재시작 실패: ${e.message}")
-                    }
+                    } catch (e: Exception) { /* ... */ }
                 }, 400)
             }
 
@@ -242,7 +276,8 @@ class PorcupineService : Service() {
                 }
                 sendStatus("❌ STT 오류: $errorMessage")
                 Log.e("PorcupineService", "STT: onError 호출됨. 오류 코드: $error ($errorMessage)")
-                speakOut("음성을 인식하지 못했어요.")
+                // 조종기에서만 음성 피드백이 필요하면 아래 한 줄 유지/제거 선택 가능
+                // if (shouldSpeak()) speakOut("음성을 인식하지 못했어요.")
 
                 sendBroadcast(Intent("com.example.remote.STT_ENDED"))
 
@@ -261,41 +296,36 @@ class PorcupineService : Service() {
                 sendStatus("🗣️ 말하기 시작 감지됨")
                 Log.d("PorcupineService", "STT: onBeginningOfSpeech 호출됨")
             }
-            override fun onRmsChanged(rmsdB: Float) {
-                sendRms(rmsdB)
-            }
-            override fun onBufferReceived(buffer: ByteArray?) {
-                Log.d("PorcupineService", "STT: onBufferReceived 호출됨. 버퍼 크기: ${buffer?.size ?: 0}")
-            }
+            override fun onRmsChanged(rmsdB: Float) { sendRms(rmsdB) }
+            override fun onBufferReceived(buffer: ByteArray?) { }
             override fun onEndOfSpeech() {
                 sendStatus("🤐 말하기 종료 감지됨")
                 Log.d("PorcupineService", "STT: onEndOfSpeech 호출됨")
             }
-            override fun onPartialResults(partialResults: Bundle?) {
-                val partialTexts = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                Log.d("PorcupineService", "STT: onPartialResults 호출됨. 부분 결과: $partialTexts")
-            }
-            override fun onEvent(eventType: Int, params: Bundle?) {
-                Log.d("PorcupineService", "STT: onEvent 호출됨. 이벤트 타입: $eventType, 파라미터: $params")
-            }
+            override fun onPartialResults(partialResults: Bundle?) { }
+            override fun onEvent(eventType: Int, params: Bundle?) { }
         })
     }
 
     private fun startSTT() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+        if (!isController()) {
+            sendStatus("RC 모드에서는 STT가 비활성입니다.")
+            return
+        }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+            != PackageManager.PERMISSION_GRANTED) {
             sendStatus("🎤 마이크 권한이 없습니다.")
             return
         }
         sendStatus("🎙 STT 요청됨 (startSTT 진입)")
-        Log.d("PorcupineService", "STT: startListening 호출 준비됨")
-        speechRecognizer.startListening(recognizerIntent)
+        speechRecognizer?.startListening(recognizerIntent)
         sendStatus("🎙 음성 인식 시작")
         Log.d("PorcupineService", "STT: startListening 호출 완료")
     }
 
     private fun stopSTT() {
         try {
-            speechRecognizer.stopListening()
+            speechRecognizer?.stopListening()
             Log.d("PorcupineService", "STT: stopListening 호출됨")
         } catch (_: Exception) {
             Log.e("PorcupineService", "STT: stopListening 중 예외 발생")
@@ -303,17 +333,22 @@ class PorcupineService : Service() {
         sendStatus("⛔ 음성 인식 중지")
         sendBroadcast(Intent("com.example.remote.STT_ENDED"))
 
-        // ✅ 수동 종료 후에도 호출어 대기 재개
-        Handler(Looper.getMainLooper()).postDelayed({
-            try {
-                porcupineManager?.start()
-                sendStatus("🟢 호출어 대기 재개")
-            } catch (e: Exception) {
-                sendStatus("❌ 호출어 재시작 실패: ${e.message}")
-            }
-        }, 400)
+        // 조종기 모드일 때만 호출어 대기 재개
+        if (isController()) {
+            Handler(Looper.getMainLooper()).postDelayed({
+                try {
+                    porcupineManager?.start()
+                    sendStatus("🟢 호출어 대기 재개")
+                } catch (e: Exception) {
+                    sendStatus("❌ 호출어 재시작 실패: ${e.message}")
+                }
+            }, 400)
+        }
     }
 
+    // ---------------------------
+    // 공용 브로드캐스트/유틸
+    // ---------------------------
     private fun sendStatus(msg: String) {
         sendBroadcast(Intent(ACTION_UPDATE_STATUS).apply {
             putExtra(EXTRA_STATUS_MESSAGE, msg)
@@ -355,7 +390,5 @@ class PorcupineService : Service() {
         }
     }
 
-    private fun log(msg: String) {
-        Log.d("PorcupineService", msg)
-    }
+    private fun log(msg: String) = Log.d("PorcupineService", msg)
 }
