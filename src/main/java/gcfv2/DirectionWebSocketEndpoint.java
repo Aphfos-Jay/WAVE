@@ -4,22 +4,33 @@ import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.annotations.*;
 import java.io.IOException;
 
+import gcfv2.ingest.IngestFirestoreService; // 클래스명 주의(앞에 Json 제거 반영)
+
+/**
+ * WebSocket 텍스트 수신:
+ * - JSON: IngestFirestoreService.handle() 호출 → 저장/조회 수행
+ * - 일반 텍스트: 기존 방향 명령 응답
+ */
 @WebSocket
 public class DirectionWebSocketEndpoint {
 
-    private final ImageUploadHandler uploader = new ImageUploadHandler();
+    private final IngestFirestoreService ingestService = new IngestFirestoreService(); // 이름 확인
 
     @OnWebSocketConnect
     public void onConnect(Session session) {
         System.out.println("WebSocket connected: " + session.getRemoteAddress());
     }
 
-    //이 골뱅이가 jetty가 쓰는 api라서 jetty가 자동호출하여 콜백함.
-    @OnWebSocketMessage 
+    @OnWebSocketMessage
     public void onMessage(Session session, String message) throws IOException {
-        //JSON이면 그대로 처리 아니라면 텍스트 처리
-        if(message!=null && message.trim().startsWith("{")){
-            uploader.handleText(session,message);
+        if (message != null && message.trim().startsWith("{")) {
+            try {
+                String result = ingestService.handle(message);
+                session.getRemote().sendString(result);
+            } catch (Exception e) {
+                session.getRemote().sendString("Firestore/GCS 처리 실패: " + e.getMessage());
+                e.printStackTrace();
+            }
             return;
         }
 
