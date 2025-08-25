@@ -9,6 +9,7 @@ import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.time.Duration;
 
 public class DirectionWebSocketServer {
 
@@ -21,6 +22,7 @@ public class DirectionWebSocketServer {
 
         // Jetty WebSocket 등록
         JettyWebSocketServletContainerInitializer.configure(context, (servletContext, wsContainer) -> {
+            wsContainer.setIdleTimeout(Duration.ofMinutes(30)); // [ADDED] 서버 컨테이너 레벨 유휴 타임아웃 30분
             wsContainer.addMapping("/direction", (req, resp) -> new DirectionWebSocketEndpoint());
         });
 

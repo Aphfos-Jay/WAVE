@@ -34,6 +34,8 @@ public class IngestFirestoreService {
     private static final DateTimeFormatter INPUT_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
     private static final DateTimeFormatter ID_FMT    = DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"); // ID용
     private static final SecureRandom RND = new SecureRandom();
+    private static volatile long lastSecond = -1;
+    private static volatile int counter = 0;
 
     // ====== 외부 진입점 ======
     public String handle(String rawJson) throws Exception {
@@ -60,13 +62,13 @@ public class IngestFirestoreService {
                 return saveTts(obj, rawJson);      
 
             case "CapUploadInit":
-                return initCapUpload(obj);
+                return initCapUpload(obj); // 사진 업로드
 
-            case "CapGet":
-                return getCapAsset(obj);
+            case "FindCap":
+                return getCapAsset(obj); // 단건 사진 조회
                     
-            case "FindCap":  
-                return findCapInRange(obj); 
+            case "FindCaps":  
+                return findCapInRange(obj); // 범위 사진 조회
 
             case "Find":                       // 범용 조회(컬렉션=Type명)
                 return genericRangeQuery(obj);  
@@ -226,7 +228,7 @@ public class IngestFirestoreService {
         // { "Type":"CapGet", "Id":"Cap_20250819_213422_5678", "TtlSec":600 }
         // 또는 { "Type":"CapGet", "GcsUri":"gs://bucket/photos/...", "TtlSec":600 }
 
-        int ttlSec = 600; // 기본 10분
+        int ttlSec = 900; // 기본 15분
         if (obj.has("TtlSec") && obj.get("TtlSec").isJsonPrimitive()) {
             try { ttlSec = obj.get("TtlSec").getAsInt(); } catch (Exception ignore) {}
         }
@@ -336,8 +338,8 @@ public class IngestFirestoreService {
      */
     private String genericRangeQuery(JsonObject obj) throws Exception { 
         String collection = getRequiredText(obj, "Collection");
-        if (!Set.of("Con","Cap","Jet","Stt","Tts").contains(collection)) { 
-            throw new IllegalArgumentException("Collection은 Con|Cap|Jet|Stt|Tts 중 하나여야 합니다.");
+        if (!Set.of("Con","Jet","Stt","Tts").contains(collection)) { 
+            throw new IllegalArgumentException("Collection은 Con|Jet|Stt|Tts 중 하나여야 합니다.");
         }
 
         String fromStr = getRequiredText(obj, "From");
@@ -414,13 +416,23 @@ public class IngestFirestoreService {
         return inst.atZone(ZONE_SEOUL);
     }
 
-    private static String buildId(String collection, Timestamp ts) {
+    private static synchronized String buildId(String collection, Timestamp ts) {
         Instant inst = Instant.ofEpochSecond(ts.getSeconds(), ts.getNanos());
         ZonedDateTime z = inst.atZone(ZONE_SEOUL);
-        String hhmmss = z.format(ID_FMT);
-        int rnd = 1000 + RND.nextInt(9000);
-        return collection + "_" + hhmmss + "_" + rnd;
+
+        long currentSecond = ts.getSeconds();
+
+        // 초가 바뀌면 카운터 초기화
+        if (currentSecond != lastSecond) {
+            lastSecond = currentSecond;
+            counter = 0;
+        }
+        counter++;
+
+        String hhmmss = z.format(ID_FMT); // yyyyMMdd_HHmmss
+        return collection + "_" + hhmmss + "_" + counter;
     }
+
 
     // Timestamp -> "yyyy-MM-dd HH:mm:ss"
     private String formatTimestamp(com.google.cloud.Timestamp ts) {
