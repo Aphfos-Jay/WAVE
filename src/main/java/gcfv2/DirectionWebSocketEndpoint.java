@@ -24,7 +24,9 @@ public class DirectionWebSocketEndpoint {
     private final ControlManager controlManager = new ControlManager();
     private static final ScheduledExecutorService KA_EXEC = Executors.newScheduledThreadPool(1);
     private static final ConcurrentHashMap<Session, ScheduledFuture<?>> KA_TASKS = new ConcurrentHashMap<>();
-
+    public DirectionWebSocketEndpoint() {
+        controlManager.setIngestService(ingestService);
+    }
 
     @OnWebSocketConnect
     public void onConnect(Session session) {

@@ -5,6 +5,7 @@ import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import gcfv2.gcs.GcsUrlUtil;
 import org.eclipse.jetty.websocket.api.Session;
+import gcfv2.ingest.IngestFirestoreService;    
 
 
 import java.io.IOException;
@@ -59,6 +60,11 @@ public class ControlManager {
     private static final ZoneId ZONE_SEOUL = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter OUT_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    // [ADDED] DB 저장은 Ingest에 위임하기 위해 주입
+    private IngestFirestoreService ingestService;
+    public void setIngestService(IngestFirestoreService s) { this.ingestService = s; }   // [ADDED]
+
+
     // =========================
     // 세션 등록/해제 (UNCHANGED)
     // =========================
@@ -74,14 +80,13 @@ public class ControlManager {
 
     // [UNCHANGED] 세션 헬퍼
     private Session getRc() { return active.get("android_rc"); }
-    private Session getCtrl() { return active.get("android_ctrl"); }
-
     private void sendTo(Session s, String msg) {
         if (s != null && s.isOpen()) {
             try { s.getRemote().sendString(msg); } catch (IOException e) { e.printStackTrace(); }
         }
     }
     private void sendToRc(String msg) { sendTo(getRc(), msg); }
+
 
     // =========================
     // 메시지 처리 (캡처만 유지)
@@ -110,26 +115,24 @@ public class ControlManager {
         try {
             JsonObject obj = GSON.fromJson(originalJson, JsonObject.class);
             String type = obj.has("Type") ? obj.get("Type").getAsString() : "";
-            if (!"Cap".equals(type)) return;  // [ADDED] 사진 저장일 때만 동작
+            if (!"Cap".equals(type)) return;  // 사진 저장일 때만 동작
 
             // Datetime (응답 JSON에 그대로 사용)
             String datetime = obj.has("Datetime") ? obj.get("Datetime").getAsString() : nowString();
 
-            // dbResult 예: Firestore 저장 OK [Cap/Cap_20250823_165000_1] (gcs=gs://bucket/photos/...)
-            String id = tryExtractCapId(dbResult);
+            // dbResult 예: Firestore 저장 OK [Cap/Cap_YYYYMMDD_HHMMSS_n] (gcs=gs://...)
+            String capId = tryExtractCapId(dbResult);
             String gcsUri = tryExtractGcsUri(dbResult);
-            if (gcsUri == null || gcsUri.isBlank()) {
-                // 혹시 모를 실패 대비로 본문에서 가져오기
-                gcsUri = obj.has("GcsUri") ? obj.get("GcsUri").getAsString() : null;
+            if ((gcsUri == null || gcsUri.isBlank()) && obj.has("GcsUri")) {
+                gcsUri = obj.get("GcsUri").getAsString();
             }
-
-            if (id == null || gcsUri == null) {
+            if (capId == null || gcsUri == null) {
                 System.err.println("[AI] skip analyze: cannot parse id/gcs from dbResult=" + dbResult);
                 return;
             }
 
             final String finalDatetime = datetime;
-            final String finalId = id;
+            final String finalId = capId;           // ← [FIX] id → capId
             final String finalGcsUri = gcsUri;
 
             exec.submit(() -> {
@@ -142,22 +145,35 @@ public class ControlManager {
                     // 2) OpenAI 분석 호출
                     String resultText = callOpenAIAnalyze(signedUrl);
 
-                    // 3) RC로 결과 JSON 푸시 (요구 포맷)
-                    JsonObject resp = new JsonObject();
-                    resp.addProperty("Type", "CapAnalysis");        // [ADDED]
-                    resp.addProperty("Datetime", finalDatetime);     // [ADDED]
-                    resp.addProperty("ID", finalId);                 // [ADDED]
-                    resp.addProperty("GcsUrl", signedUrl);           // [ADDED] (접근 가능한 URL)
-                    resp.addProperty("Result", resultText);          // [ADDED]
-                    sendToRc(GSON.toJson(resp));
+                    // 3) DB 저장은 ingest 서비스에 위임 (Type=Ai)
+                    if (ingestService != null) {
+                        JsonObject ai = new JsonObject();
+                        ai.addProperty("Type", "Ai");
+                        ai.addProperty("Datetime", finalDatetime);
+                        ai.addProperty("CapId", finalId);
+                        ai.addProperty("GcsUri", finalGcsUri); // 원본 gs://
+                        ai.addProperty("Url", signedUrl);      // 서명 URL
+                        ai.addProperty("Result", resultText);
+                        try {
+                            String saved = ingestService.handle(ai.toString()); // 저장
+                            System.out.println("[AI] saved: " + saved);
+                        } catch (Exception e) {
+                            System.err.println("[AI] save failed: " + e.getMessage());
+                        }
+                    }
 
-                    System.out.println("[AI] Analysis sent to RC. capId=" + finalId);
-                    
-                    // [ADDED] 우선 보낸 세션으로 회신. 세션이 없거나 닫혔으면 RC로 폴백.
+                    // 4) 결과 JSON: "보낸 세션"에게만 전송 (RC 전송 제거)
+                    JsonObject resp = new JsonObject();
+                    resp.addProperty("Type", "CapAnalysis");
+                    resp.addProperty("Datetime", finalDatetime);
+                    resp.addProperty("ID", finalId);
+                    resp.addProperty("gcsurl", signedUrl);   // ← 소문자 키로 통일
+                    resp.addProperty("result", resultText);  // ← 소문자 키로 통일
+
                     if (replyTo != null && replyTo.isOpen()) {
                         sendTo(replyTo, resp.toString());
                     } else {
-                        sendToRc(resp.toString()); // 폴백
+                        System.out.println("[AI] replyTo session closed or null; result not delivered. capId=" + finalId);
                     }
 
                 } catch (Exception e) {
@@ -168,7 +184,12 @@ public class ControlManager {
                     fail.addProperty("ID", finalId);
                     fail.addProperty("gcsurl", finalGcsUri);
                     fail.addProperty("result", "분석 실패: " + e.getMessage());
-                    sendToRc(GSON.toJson(fail));
+
+                    if (replyTo != null && replyTo.isOpen()) {
+                        sendTo(replyTo, fail.toString());
+                    } else {
+                        System.out.println("[AI] replyTo session closed or null; fail result not delivered. capId=" + finalId);
+                    }
                 }
             });
         } catch (Exception ignore) {
@@ -176,62 +197,63 @@ public class ControlManager {
         }
     }
 
-    // =========================
-    // [ADDED] OpenAI 호출부
-    // =========================
-    private String callOpenAIAnalyze(String imageUrl) throws Exception {
-        String apiKey = System.getenv("OPENAI_API_KEY");
-        if (apiKey == null || apiKey.isBlank()) {
-            throw new IllegalStateException("OPENAI_API_KEY 환경변수가 필요합니다.");
+        // =========================
+        // [ADDED] OpenAI 호출부
+        // =========================
+        private String callOpenAIAnalyze(String imageUrl) throws Exception {
+            String apiKey = System.getenv("OPENAI_API_KEY");
+            if (apiKey == null || apiKey.isBlank()) {
+                throw new IllegalStateException("OPENAI_API_KEY 환경변수가 필요합니다.");
+            }
+
+            // 시스템 프롬프트: 하수구 청소 로봇 관제 시나리오
+            String system = "현재 배수로 및 하수구 청소 로봇이 찍은 사진이다. "
+                    + "이미지를 보고 객체를 분석하여 알려주고 위험요소(감전/흡입/전선/날카로움/미끄럼), 주행 가능성, "
+                    + "청소 우선순위(분사/파쇄/우회)등 을 고려하여 분석한 결과를 간결하게 특수문자나 이모티콘없이"
+                    + "한국어 스크립트로 제안해라. 사용자에게 말하듯이 잘 정리해서";
+
+            Map<String, Object> imagePart = Map.of(
+                    "type", "image_url",
+                    "image_url", Map.of("url", imageUrl)
+            );
+            Map<String, Object> textPart = Map.of(
+                    "type", "text",
+                    "text", "현재 상황 요약 + 위험요소 + 즉시 수행 액션(우선순위) 중심으로 말해줘."
+            );
+
+            Map<String, Object> body = Map.of(
+                    "model", "gpt-4o-mini",
+                    "messages", List.of(
+                            Map.of("role", "system", "content", system),
+                            Map.of("role", "user", "content", List.of(textPart, imagePart))
+                    ),
+                    "temperature", 0.2
+            );
+
+            String json = GSON.toJson(body);
+            HttpRequest req = HttpRequest.newBuilder()
+                    .uri(java.net.URI.create("https://api.openai.com/v1/chat/completions"))
+                    .header("Authorization", "Bearer " + apiKey)
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(json))
+                    .build();
+
+            HttpClient http = HttpClient.newHttpClient();
+            HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
+            if (res.statusCode() / 100 != 2) {
+                throw new RuntimeException("OpenAI 호출 실패: " + res.statusCode() + " " + res.body());
+            }
+
+            JsonObject root = GSON.fromJson(res.body(), JsonObject.class);
+            try {
+                return root.getAsJsonArray("choices")
+                        .get(0).getAsJsonObject()
+                        .getAsJsonObject("message")
+                        .get("content").getAsString();
+            } catch (Exception e) {
+                throw new RuntimeException("OpenAI 응답 파싱 실패: " + e.getMessage() + " / body=" + res.body());
+            }
         }
-
-        // 시스템 프롬프트: 하수구 청소 로봇 관제 시나리오
-        String system = "현재 하수구/배수로 청소 로봇이 찍은 사진이다. "
-                + "이미지를 보고 객체를 분석하여 알려주고 위험요소(감전/흡입/전선/날카로움/미끄럼), 주행 가능성, "
-                + "청소 우선순위(분사/파쇄/우회)등 을 고려하여 분석한 결과를 간결한 한국어 스크립트로 제안해라.";
-
-        Map<String, Object> imagePart = Map.of(
-                "type", "image_url",
-                "image_url", Map.of("url", imageUrl)
-        );
-        Map<String, Object> textPart = Map.of(
-                "type", "text",
-                "text", "현재 상황 요약 + 위험요소 + 즉시 수행 액션(우선순위) 중심으로 말해줘."
-        );
-
-        Map<String, Object> body = Map.of(
-                "model", "gpt-4o-mini",
-                "messages", List.of(
-                        Map.of("role", "system", "content", system),
-                        Map.of("role", "user", "content", List.of(textPart, imagePart))
-                ),
-                "temperature", 0.2
-        );
-
-        String json = GSON.toJson(body);
-        HttpRequest req = HttpRequest.newBuilder()
-                .uri(java.net.URI.create("https://api.openai.com/v1/chat/completions"))
-                .header("Authorization", "Bearer " + apiKey)
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(json))
-                .build();
-
-        HttpClient http = HttpClient.newHttpClient();
-        HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
-        if (res.statusCode() / 100 != 2) {
-            throw new RuntimeException("OpenAI 호출 실패: " + res.statusCode() + " " + res.body());
-        }
-
-        JsonObject root = GSON.fromJson(res.body(), JsonObject.class);
-        try {
-            return root.getAsJsonArray("choices")
-                    .get(0).getAsJsonObject()
-                    .getAsJsonObject("message")
-                    .get("content").getAsString();
-        } catch (Exception e) {
-            throw new RuntimeException("OpenAI 응답 파싱 실패: " + e.getMessage() + " / body=" + res.body());
-        }
-    }
 
     // =========================
     // [ADDED] 유틸

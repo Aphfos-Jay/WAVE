@@ -46,14 +46,9 @@ public class IngestFirestoreService {
         }
 
         switch (type) {
-            case "Con":
-                return saveCon(obj, rawJson);      
 
             case "Cap":
-                return saveCap(obj, rawJson);     
-
-            case "Jet":                             
-                return saveJet(obj, rawJson);      
+                return saveCap(obj, rawJson);          
 
             case "Stt":
                 return saveStt(obj, rawJson);      
@@ -70,8 +65,11 @@ public class IngestFirestoreService {
             case "FindCaps":  
                 return findCapInRange(obj); // 범위 사진 조회
 
-            case "Find":                       // 범용 조회(컬렉션=Type명)
-                return genericRangeQuery(obj);  
+            case "Find":                       
+                return genericRangeQuery(obj);  // 범용 조회(컬렉션=Type명)
+
+            case "Ai":              
+                return saveAi(obj, rawJson);
 
             default:
                 throw new IllegalArgumentException("지원하지 않는 Type: " + type);
@@ -79,27 +77,6 @@ public class IngestFirestoreService {
     }
 
     // ====== Type별 저장 ======
-
-    /**
-     * Con: {Type:Con, Datetime:"...", Value:"Forward|Back|Left|Right", ...}
-     * 컬렉션: controls
-     * - 필드 분해 + raw(원문 Map) 동시 저장  
-     */
-    private String saveCon(JsonObject obj, String rawJson) throws Exception { 
-        Timestamp ts = toTimestamp(getRequiredText(obj, "Datetime"));
-        String value = getRequiredText(obj, "Value");
-
-        Map<String, Object> doc = new HashMap<>();
-        doc.put("type", "Con");
-        doc.put("datetime", ts);
-        doc.put("value", value);
-        doc.put("raw", GSON.fromJson(rawJson, Map.class)); // 원문 저장
-
-        String collection = "Con";
-        String id = buildId(collection, ts);
-        writeDoc(collection, id, doc);
-        return ackSaved(collection, id);
-    }
 
     /**
      * 컬렉션: Cap
@@ -129,28 +106,6 @@ public class IngestFirestoreService {
         writeDoc(collection, id, doc);
 
         return ackSaved(collection, id) + " (gcs=" + gcsUri + ")";
-    }
-
-
-    /**
-     * Jet: {Type:Jet, Datetime:"...", Value:"Launch|Stop", ...}
-     * 컬렉션: jets   // 
-     * - 필드 분해 + raw 저장
-     */
-    private String saveJet(JsonObject obj, String rawJson) throws Exception { 
-        Timestamp ts = toTimestamp(getRequiredText(obj, "Datetime"));
-        String value = getRequiredText(obj, "Value"); // Launch/Stop
-
-        Map<String, Object> doc = new HashMap<>();
-        doc.put("type", "Jet");                        
-        doc.put("datetime", ts);
-        doc.put("value", value);
-        doc.put("raw", GSON.fromJson(rawJson, Map.class)); 
-
-        String collection = "Jet";                   
-        String id = buildId(collection, ts);
-        writeDoc(collection, id, doc);
-        return ackSaved(collection, id);
     }
 
     /**
@@ -331,15 +286,15 @@ public class IngestFirestoreService {
     // ========= [ADDED] 범용 범위 조회(Find) =========
 
     /**
-     * { "Type":"Find", "Collection":"Con|Cap|Jet|Stt|Tts", "From":"...", "To":"..." }
+     * { "Type":"Find", "Collection":"Cap|Stt|Tts", "From":"...", "To":"..." }
      * - 해당 컬렉션에서 datetime 범위로 문서 조회
      * - 각 문서의 raw(Map)만 모아 배열로 반환
      * - 응답은 wrapper 오브젝트로 감싸서 Type/Collection/From/To 포함
      */
     private String genericRangeQuery(JsonObject obj) throws Exception { 
         String collection = getRequiredText(obj, "Collection");
-        if (!Set.of("Con","Jet","Stt","Tts").contains(collection)) { 
-            throw new IllegalArgumentException("Collection은 Con|Jet|Stt|Tts 중 하나여야 합니다.");
+        if (!Set.of("Stt","Tts","Ai").contains(collection)) { 
+            throw new IllegalArgumentException("Collection은 Stt|Tts|Ai 중 하나여야 합니다.");
         }
 
         String fromStr = getRequiredText(obj, "From");
@@ -374,6 +329,36 @@ public class IngestFirestoreService {
         return GSON.toJson(resp);
     }
 
+    // [ADDED] ChatGPT 결과 저장: Type=Ai
+    private String saveAi(JsonObject obj, String rawJson) throws Exception {
+        // 필수 필드
+        Timestamp ts = toTimestamp(getRequiredText(obj, "Datetime"));
+        // Cap 문서 ID는 CapId 또는 ID로 받도록 유연하게 처리
+        String capId = getAsText(obj, "CapId");
+        if (capId == null || capId.isBlank()) capId = getRequiredText(obj, "ID");
+        String result = getRequiredText(obj, "Result");
+
+        // 선택 필드
+        String gcsUri = getAsText(obj, "GcsUri");   // 원본 gs://
+        String url    = getAsText(obj, "Url");      // 서명 URL
+
+        Map<String, Object> doc = new LinkedHashMap<>();
+        doc.put("type", "Ai");
+        doc.put("datetime", ts);
+        doc.put("capId", capId);
+        if (gcsUri != null && !gcsUri.isBlank()) doc.put("gcsUri", gcsUri);
+        if (url != null && !url.isBlank())       doc.put("url", url);
+        doc.put("result", result);
+        doc.put("raw", GSON.fromJson(rawJson, Map.class)); // 원문 보관
+
+        String collection = "Ai";
+        // Ai 문서는 Cap 문서와 1:1로 매핑되도록 ID를 고정
+        String id = "Ai_" + capId;                          // 예: Ai_Cap_20250825_214512_1
+        writeDoc(collection, id, doc);
+        return ackSaved(collection, id);
+    }
+
+
     // ====== 공통 유틸 ======
 
     private void writeDoc(String collection, String id, Map<String, Object> doc) throws Exception {
@@ -382,7 +367,7 @@ public class IngestFirestoreService {
     }
 
     private String ackSaved(String collection, String id) {
-        return "Firestore 저장 OK [" + collection + "/" + id + "]";
+        return "Firestore 저장 완료 [" + collection + "/" + id + "]";
     }
 
     private static String getRequiredText(JsonObject obj, String key) {
