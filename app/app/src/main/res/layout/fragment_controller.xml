@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- ↑ 상단: 1번 기기 카메라 원격 피드 -->
+    <ImageView
+        android:id="@+id/ctrl_remoteFeed"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:scaleType="centerCrop"
+        android:contentDescription="Remote camera feed" />
+
+    <!-- ↓ 하단: 조종 패널 -->
+    <LinearLayout
+        android:id="@+id/ctrl_bottomPanel"
+        android:layout_width="match_parent"
+        android:layout_height="180dp"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:gravity="center_vertical"
+        android:background="#F3F3F7">
+
+        <!-- 조이스틱 (왼쪽) -->
+        <com.example.remote.JoystickView
+            android:id="@+id/ctrl_joystick"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="2"
+            android:layout_marginEnd="16dp" />
+
+        <!-- 버튼들 (오른쪽) -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
+
+            <Button
+                android:id="@+id/ctrl_captureRequestButton"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:text="📸 캡처"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#5E35B1" />
+
+            <Space android:layout_width="match_parent" android:layout_height="12dp"/>
+
+            <Button
+                android:id="@+id/ctrl_sprayButton"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:text="💧 물 발사"
+                android:textColor="#FFFFFF"
+                android:backgroundTint="#00897B" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>
