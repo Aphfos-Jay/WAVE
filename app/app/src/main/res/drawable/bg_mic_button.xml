@@ -1,0 +1,8 @@
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="#33000000"> <!-- 클릭 시 반투명 검정 퍼짐 -->
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#4285F4"/>
+        </shape>
+    </item>
+</ripple>

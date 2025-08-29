@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/black"
+    tools:context=".ControllerFragment">
+
+    <!-- 카메라 피드 -->
+    <ImageView
+        android:id="@+id/ctrl_remoteFeed"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@color/black"
+        android:scaleType="centerCrop"
+        android:contentDescription="@string/desc_remote_feed"/>
+
+    <!-- LIVE 라벨 -->
+    <TextView
+        android:id="@+id/txt_live"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="12dp"
+        android:text="LIVE"
+        android:textColor="@color/white"
+        android:textSize="14sp"
+        android:background="@drawable/bg_label_live"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="4dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"/>
+
+    <!-- 연결 상태 라벨 -->
+    <TextView
+        android:id="@+id/txt_connection"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="12dp"
+        android:text="연결 끊김"
+        android:textColor="@color/white"
+        android:textSize="14sp"
+        android:background="@drawable/bg_label_conn"
+        android:paddingHorizontal="8dp"
+        android:paddingVertical="4dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"/>
+
+    <!-- 조이스틱 -->
+    <com.example.remote.JoystickView
+        android:id="@+id/ctrl_joystick"
+        android:layout_width="177dp"
+        android:layout_height="181dp"
+        android:layout_marginStart="32dp"
+        android:layout_marginBottom="32dp"
+        app:joystick_background_color="@color/white"
+        app:joystick_color="@color/purple_500"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
+
+    <!-- 캡처 버튼 -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_capture"
+        style="@style/Widget.MyApp.Button.Capture"
+        android:layout_width="wrap_content"
+        android:layout_height="56dp"
+        android:layout_marginEnd="12dp"
+        android:icon="@drawable/ic_camera"
+        android:text="@string/desc_capture"
+        app:cornerRadius="28dp"
+        app:iconPadding="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/btn_spray"
+        android:layout_marginBottom="32dp"/>
+
+    <!-- 물 발사 버튼 -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_spray"
+        style="@style/Widget.MyApp.Button.Spray"
+        android:layout_width="wrap_content"
+        android:layout_height="56dp"
+        android:icon="@drawable/ic_water_drop"
+        android:text="@string/desc_spray"
+        app:cornerRadius="28dp"
+        app:iconPadding="8dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:backgroundTint="@color/white"
+        android:layout_marginEnd="32dp"
+        android:layout_marginBottom="32dp"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

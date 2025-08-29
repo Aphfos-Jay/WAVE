@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/black"
+    tools:context=".ControllerFragment">
+
+    <!-- 카메라 피드 -->
+    <FrameLayout
+        android:id="@+id/camera_container"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/bottom_panel"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageView
+            android:id="@+id/ctrl_remoteFeed"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/black"
+            android:contentDescription="@string/desc_remote_feed"
+            android:scaleType="centerCrop" />
+
+        <!-- 상단 좌측 LIVE -->
+        <TextView
+            android:id="@+id/txt_live"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="12dp"
+            android:text="LIVE"
+            android:textColor="@color/white"
+            android:textSize="14sp"
+            android:background="@drawable/bg_label_live"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="4dp"
+            android:layout_gravity="top|start"/>
+
+        <!-- 상단 우측 연결 -->
+        <TextView
+            android:id="@+id/txt_connection"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_margin="12dp"
+            android:text="연결 끊김"
+            android:textColor="@color/white"
+            android:textSize="14sp"
+            android:background="@drawable/bg_label_conn"
+            android:paddingHorizontal="8dp"
+            android:paddingVertical="4dp"
+            android:layout_gravity="top|end"/>
+    </FrameLayout>
+
+    <!-- 하단 패널 -->
+    <LinearLayout
+        android:id="@+id/bottom_panel"
+        android:layout_width="0dp"
+        android:layout_height="220dp"
+        android:background="@color/gray_bg"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <!-- 왼쪽: 조이스틱 + 라벨 + 힌트 -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="2"
+            android:orientation="vertical"
+            android:gravity="start|center_vertical">
+
+            <!-- 묶음: 조이스틱 + 텍스트 2개 -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:gravity="center_horizontal">
+
+                <com.example.remote.JoystickView
+                    android:id="@+id/ctrl_joystick"
+                    android:layout_width="157dp"
+                    android:layout_height="157dp"
+                    app:joystick_background_color="@color/gray_bg"
+                    app:joystick_color="@color/purple_500"/>
+
+                <!-- 조이스틱 라벨 -->
+                <TextView
+                    android:id="@+id/txt_joystick_label"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="조이스틱"
+                    android:textColor="@color/text_gray"
+                    android:textSize="14sp"/>
+
+                <!-- 힌트 -->
+                <TextView
+                    android:id="@+id/txt_joystick_hint"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="터치하여 조작하세요"
+                    android:textColor="@color/text_gray"
+                    android:textSize="12sp"/>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 오른쪽: 버튼 -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center"
+            android:paddingHorizontal="8dp">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_capture"
+                style="@style/Widget.MyApp.Button.Capture"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginBottom="16dp"
+                android:icon="@drawable/ic_camera"
+                android:text="@string/desc_capture"
+                app:cornerRadius="12dp"
+                app:iconPadding="8dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_spray"
+                style="@style/Widget.MyApp.Button.Spray"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:icon="@drawable/ic_water_drop"
+                android:text="@string/desc_spray"
+                app:cornerRadius="12dp"
+                app:iconPadding="8dp" />
+        </LinearLayout>
+    </LinearLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

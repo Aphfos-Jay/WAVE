@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#F8F9FA">
+
+    <!-- 메인 콘텐츠는 ConstraintLayout 안에 -->
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <!-- RMS 애니메이션 -->
+
+        <!-- 마이크 버튼 -->
+        <ImageButton
+            android:id="@+id/sttButton"
+            android:layout_width="118dp"
+            android:layout_height="112dp"
+            android:background="@drawable/bg_mic_button"
+            android:contentDescription="@string/desc_mic_button"
+            android:elevation="4dp"
+            android:padding="32dp"
+            android:scaleType="fitCenter"
+            android:src="@drawable/ic_mic_white"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintVertical_bias="0.55" />
+
+        <!-- 타이틀 -->
+        <TextView
+            android:id="@+id/titleTextView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="음성 어시스턴트"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:textColor="#333333"
+            app:layout_constraintBottom_toTopOf="@id/subtitleTextView"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginBottom="8dp"/>
+
+        <TextView
+            android:id="@+id/subtitleTextView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="말하거나 텍스트를 입력해보세요"
+            android:textSize="16sp"
+            android:textColor="#666666"
+            app:layout_constraintBottom_toTopOf="@id/ttsCard"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:layout_marginBottom="32dp"/>
+
+        <!-- TTS 카드 -->
+        <androidx.cardview.widget.CardView
+            android:id="@+id/ttsCard"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="24dp"
+            android:layout_marginBottom="24dp"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="2dp"
+            app:layout_constraintBottom_toTopOf="@id/sttButton"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="20dp">
+
+                <TextView
+                    android:id="@+id/ttsCardTitle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="텍스트 읽어주기"
+                    android:textColor="#333333"
+                    android:textStyle="bold"
+                    android:textSize="16sp"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"/>
+
+                <EditText
+                    android:id="@+id/ttsInputEditText"
+                    android:layout_width="0dp"
+                    android:layout_height="52dp"
+                    android:layout_marginTop="16dp"
+                    android:layout_marginEnd="8dp"
+                    android:background="@drawable/bg_edittext_rounded"
+                    android:hint="읽어줄 텍스트를 입력하세요"
+                    android:paddingHorizontal="16dp"
+                    android:textSize="14sp"
+                    app:layout_constraintTop_toBottomOf="@id/ttsCardTitle"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintEnd_toStartOf="@id/ttsButton" />
+
+                <Button
+                    android:id="@+id/ttsButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="52dp"
+                    android:background="@drawable/bg_button_primary"
+                    android:text="전송"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold"
+                    app:layout_constraintTop_toTopOf="@id/ttsInputEditText"
+                    app:layout_constraintBottom_toBottomOf="@id/ttsInputEditText"
+                    app:layout_constraintEnd_toEndOf="parent"/>
+            </androidx.constraintlayout.widget.ConstraintLayout>
+        </androidx.cardview.widget.CardView>
+
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+    <!-- 로그 BottomSheet -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/logLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"  android:layout_margin="16dp"
+        app:cardCornerRadius="24dp"
+        app:cardElevation="4dp"
+        app:layout_behavior="com.google.android.material.bottomsheet.BottomSheetBehavior"
+        app:behavior_fitToContents="false"
+        app:behavior_expandedOffset="180dp"
+        app:behavior_halfExpandedRatio="0.36"
+        app:cardBackgroundColor="@color/white">  <androidx.constraintlayout.widget.ConstraintLayout
+
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:padding="16dp">
+
+        <RelativeLayout
+            android:id="@+id/logHeader"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="시스템 로그"
+                android:textColor="#333333"
+                android:textStyle="bold"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"/>
+            <Button
+                android:id="@+id/clearLogButton"
+                style="@style/Widget.AppCompat.Button.Borderless"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="지우기"
+                android:minWidth="48dp"
+                android:minHeight="48dp"
+                android:textColor="#666666"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"/>
+        </RelativeLayout>
+
+        <androidx.core.widget.NestedScrollView
+            android:id="@+id/logScrollView" android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_marginTop="8dp"
+            android:scrollbarThumbVertical="@drawable/scrollbar_thumb" app:layout_constraintTop_toBottomOf="@id/logHeader"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent">
+
+            <TextView
+                android:id="@+id/statusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                tools:text="[1] 음성 인식 시스템이 준비되었습니다.\n[2] TTS 엔진이 초기화되었습니다."
+                /> </androidx.core.widget.NestedScrollView>
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </com.google.android.material.card.MaterialCardView>
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

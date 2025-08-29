@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/nav_home">
+
+    <fragment
+        android:id="@+id/nav_home"
+        android:name="com.example.remote.HomeFragment"
+        android:label="홈"
+        tools:layout="@layout/fragment_home" />
+
+    <!-- RemoteFragment 대신 ControllerFragment / RcFragment로 수정 -->
+    <fragment
+        android:id="@+id/controllerFragment"
+        android:name="com.example.remote.ControllerFragment"
+        android:label="조종기"
+        tools:layout="@layout/fragment_controller" />
+
+    <fragment
+        android:id="@+id/rcFragment"
+        android:name="com.example.remote.RcFragment"
+        android:label="RC"
+        tools:layout="@layout/fragment_rc" />
+
+    <fragment
+        android:id="@+id/galleryFragment"
+        android:name="com.example.remote.GalleryFragment"
+        android:label="갤러리"
+        tools:layout="@layout/fragment_gallery" />
+
+</navigation>

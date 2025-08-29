@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 기본 메인 톤 (블루) -->
+    <color name="purple_500">#4285F4</color>   <!-- 그대로 사용 -->
+    <color name="purple_700">#804285F4</color>
+    <color name="blue_primary">#4285F4</color>
+    <color name="blue_dark">#3367D6</color>
+
+    <!-- 보조 색상 -->
+    <color name="teal_200">#03DAC5</color>
+
+    <!-- 공통 색상 -->
+    <color name="white">#FFFFFF</color>
+    <color name="black">#000000</color>
+    <color name="gray_bg">#F8F9FA</color>
+    <color name="text_gray">#757575</color>
+</resources>

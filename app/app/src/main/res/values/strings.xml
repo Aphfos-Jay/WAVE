@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SurfBoard</string>
+
+    <!-- 마이크 버튼 설명 추가 -->
+    <string name="desc_mic_button">마이크 버튼</string>
+
+    <string name="desc_remote_feed">카메라 피드</string>
+    <string name="desc_capture">사진 촬영</string>
+    <string name="desc_spray">물 발사</string>
+
+    <string name="open_drawer">메뉴 열기</string>
+    <string name="close_drawer">메뉴 닫기</string>
+
+</resources>
