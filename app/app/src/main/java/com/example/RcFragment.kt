@@ -323,7 +323,7 @@ class RcFragment : Fragment() {
                 provider.unbindAll()
                 provider.bindToLifecycle(
                     viewLifecycleOwner,
-                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    CameraSelector.DEFAULT_FRONT_CAMERA,
                     preview,
                     imageCapture,
                     analysis

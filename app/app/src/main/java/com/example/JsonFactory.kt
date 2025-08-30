@@ -33,7 +33,7 @@ object JsonFactory {
         JSONObject().apply {
             put("Type", "Stt")
             put("Datetime", nowString())
-            put("Voice", text)
+            put("Text", text)
         }.toString()
 
     fun createTtsRequestMessage(text: String): String =

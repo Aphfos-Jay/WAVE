@@ -11,17 +11,17 @@ import android.view.animation.AnimationUtils
 import android.widget.*
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.activityViewModels
+import androidx.recyclerview.widget.LinearLayoutManager
 import com.google.android.material.bottomsheet.BottomSheetBehavior
 import java.text.SimpleDateFormat
 import java.util.*
 
 class HomeFragment : Fragment() {
 
-    private lateinit var statusText: TextView
     private lateinit var sttButton: ImageButton
     private lateinit var ttsButton: Button
     private lateinit var ttsInputEditText: EditText
-
     private lateinit var clearLogButton: Button
 
     private lateinit var tts: TextToSpeech
@@ -30,10 +30,12 @@ class HomeFragment : Fragment() {
     // BottomSheet
     private lateinit var bottomSheetBehavior: BottomSheetBehavior<View>
 
+    // ✅ ViewModel & Adapter
+    private val viewModel: ConversationViewModel by activityViewModels()
+    private lateinit var logAdapter: LogAdapter
 
     companion object {
         private const val PREFS_NAME = "TTS_PREFS"
-        private const val CONVERSATION_LOG_FILE = "conversation_log.json"
     }
 
     override fun onCreateView(
@@ -46,24 +48,37 @@ class HomeFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
-        statusText = view.findViewById(R.id.statusText)
+        // UI 바인딩
         sttButton = view.findViewById(R.id.sttButton)
         ttsButton = view.findViewById(R.id.ttsButton)
         ttsInputEditText = view.findViewById(R.id.ttsInputEditText)
-
         clearLogButton = view.findViewById(R.id.clearLogButton)
 
         sharedPreferences = requireContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+        // ✅ 로그 RecyclerView & ViewModel 연결
+        val recyclerView: androidx.recyclerview.widget.RecyclerView =
+            view.findViewById(R.id.logRecyclerView)
+        logAdapter = LogAdapter()
+        recyclerView.adapter = logAdapter
+        recyclerView.layoutManager = LinearLayoutManager(requireContext())
+
+        viewModel.logs.observe(viewLifecycleOwner) { logs ->
+            logAdapter.submitList(logs)
+            if (logs.isNotEmpty()) recyclerView.scrollToPosition(logs.size - 1)
+        }
+
         // BottomSheetBehavior 설정
         val logLayout: View = view.findViewById(R.id.logLayout)
-        bottomSheetBehavior = BottomSheetBehavior.from(logLayout)
-        bottomSheetBehavior.state = BottomSheetBehavior.STATE_COLLAPSED
-        bottomSheetBehavior.peekHeight = 350 // 최소 높이 (dp 단위)
+        bottomSheetBehavior = BottomSheetBehavior.from(logLayout).apply {
+            state = BottomSheetBehavior.STATE_COLLAPSED
+            peekHeight = 350
+        }
 
         initTTS()
         registerBroadcastReceiver()
 
+        // ✅ TTS 버튼
         ttsButton.setOnClickListener {
             val text = ttsInputEditText.text.toString()
             if (text.isNotEmpty()) {
@@ -72,19 +87,17 @@ class HomeFragment : Fragment() {
                 tts.setSpeechRate(rate)
                 tts.setPitch(pitch)
                 tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "tts_speak")
+                viewModel.appendLog("🗣️ 수동 TTS: $text")
             }
         }
 
-
-
+        // ✅ STT 버튼
         sttButton.setOnClickListener {
-            // pulse 애니메이션 (mic_pulse.xml)
             it.startAnimation(AnimationUtils.loadAnimation(requireContext(), R.anim.mic_pulse))
 
             PermissionUtils.ensureMicPermissionOrRequest(
                 activity = requireActivity(),
                 onGranted = {
-                    // 서비스 실행 + STT 시작
                     ContextCompat.startForegroundService(
                         requireContext(),
                         Intent(requireContext(), PorcupineService::class.java).apply {
@@ -97,51 +110,36 @@ class HomeFragment : Fragment() {
                             action = PorcupineService.ACTION_START_STT
                         }
                     )
+                    viewModel.appendLog("🎤 STT 시작")
                 },
-                onDenied = {
-                    appendStatus("🎤 마이크 권한이 필요합니다.")
-                }
+                onDenied = { viewModel.appendLog("❌ 마이크 권한이 필요합니다.") }
             )
         }
 
+        // ✅ 로그 초기화 버튼
         clearLogButton.setOnClickListener {
-            statusText.text = ""
-            appendStatus("로그가 초기화되었습니다.")
+            viewModel.clearLogs()
+            viewModel.appendLog("🗑 로그가 초기화되었습니다.")
         }
 
-
-        /*
-
+        // ✅ WebSocket 이벤트 → 로그 기록
         WebSocketManager.getInstance().addEventListener { type, content ->
             when (type) {
-                "Tts" -> {
-                    appendStatus("🔊 서버 TTS: $content")
-                    // ❌ tts.speak(...) 제거
-                }
-                "SttResult" -> {
-                    appendStatus("🤖 Agent 응답: $content")
-                    // ❌ tts.speak(...) 제거
-                }
+                "Tts" -> viewModel.appendLog("🔊 서버 TTS: $content")
+                "SttResult" -> viewModel.appendLog("🤖 Agent 응답: $content")
             }
         }
-
-         */
-
     }
 
     private fun mapRmsToScale(rms: Float): Float {
-        val minInput = 0f     // 말 안 할 때
-        val maxInput = 10f    // 크게 말할 때
-
-        val minScale = 1.0f   // 기본 크기
-        val maxScale = 1.3f   // 최대 커지는 크기
-
+        val minInput = 0f
+        val maxInput = 10f
+        val minScale = 1.0f
+        val maxScale = 1.3f
         val clamped = rms.coerceIn(minInput, maxInput)
         val scale = minScale + ((clamped - minInput) / (maxInput - minInput)) * (maxScale - minScale)
-
         return if (scale.isNaN()) 1.0f else scale
     }
-
 
     private fun initTTS() {
         tts = TextToSpeech(requireContext()) { status ->
@@ -151,16 +149,11 @@ class HomeFragment : Fragment() {
                 tts.setSpeechRate(rate)
                 tts.setPitch(pitch)
                 tts.language = Locale.KOREAN
-                appendStatus("TTS 초기화 완료")
+                viewModel.appendLog("✅ TTS 초기화 완료")
             } else {
-                appendStatus("TTS 초기화 실패")
+                viewModel.appendLog("❌ TTS 초기화 실패")
             }
         }
-    }
-
-    private fun appendStatus(msg: String) {
-        val time = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
-        statusText.append("[$time] $msg\n")
     }
 
     private fun registerBroadcastReceiver() {
@@ -184,33 +177,29 @@ class HomeFragment : Fragment() {
             when (intent?.action) {
                 PorcupineService.ACTION_UPDATE_STATUS -> {
                     val msg = intent.getStringExtra(PorcupineService.EXTRA_STATUS_MESSAGE) ?: return
-                    appendStatus(msg)
+                    viewModel.appendLog(msg)
                 }
 
                 PorcupineService.ACTION_UPDATE_RMS -> {
                     val rms = intent.getFloatExtra(PorcupineService.EXTRA_RMS_VALUE, -60f)
-
-
                     val scale = mapRmsToScale(rms)
-
-
                     sttButton.animate()
                         .scaleX(scale)
                         .scaleY(scale)
-                        .setDuration(100) // 빠른 반응
+                        .setDuration(100)
                         .start()
                 }
 
                 PorcupineService.ACTION_LOG_CONVERSATION -> {
                     val type = intent.getStringExtra(PorcupineService.EXTRA_LOG_TYPE)
                     val content = intent.getStringExtra(PorcupineService.EXTRA_LOG_CONTENT)
-                    appendStatus("[$type] $content")
+                    if (type != null && content != null) {
+                        viewModel.appendLog("[$type] $content")
+                    }
                 }
 
                 "com.example.remote.STT_ENDED" -> {
                     sttButton.contentDescription = "🎙 수동 음성 명령"
-
-                    // ✅ STT 끝나면 원래 크기로 복귀
                     sttButton.animate()
                         .scaleX(1f)
                         .scaleY(1f)
@@ -221,10 +210,8 @@ class HomeFragment : Fragment() {
         }
     }
 
-
     override fun onDestroyView() {
         super.onDestroyView()
-        WebSocketManager.getInstance().removeEventListener { type, content -> } // TODO: 같은 리스너 참조로 제거
         requireContext().unregisterReceiver(serviceReceiver)
         tts.shutdown()
     }

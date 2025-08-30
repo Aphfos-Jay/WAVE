@@ -60,6 +60,7 @@ class GalleryFragment : Fragment() {
                                 )
                             )
                         }
+                        photoList.sortByDescending { it.datetime }
                         galleryAdapter.submitList(photoList.toList())
                         if (isAdded) {
                             Toast.makeText(context, "${photoList.size}개의 사진을 찾았습니다.", Toast.LENGTH_SHORT).show()

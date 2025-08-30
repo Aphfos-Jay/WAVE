@@ -36,8 +36,8 @@ class PorcupineService : Service() {
     private val KOR_COMMAND = mapOf(
         "Forward" to "앞으로",
         "Back" to "뒤로",
-        "Left" to "왼쪽으로",
-        "Right" to "오른쪽으로"
+        "Forward-Left" to "좌회전",
+        "Forward-Right" to "우회전"
     )
 
     companion object {
@@ -208,7 +208,7 @@ class PorcupineService : Service() {
         val intent = Intent(this, MainActivity::class.java)
         val pending = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(this, "voice_channel")
-            .setContentTitle("Voice Assistant")
+            .setContentTitle("SurfBoard")
             .setContentText(msg)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(pending)
@@ -274,13 +274,16 @@ class PorcupineService : Service() {
                     sendStatus("🟢 호출어 인식됨")
                     logConversation("Hotword", "호출어가 감지되었습니다")
 
+                    // ✅ RC에서 바로 "네, 말씀하세요" 발화
+                    val ttsJson = JsonFactory.createTtsRequestMessage("네, 말씀하세요")
+                    RpiWebSocketManager.sendText(ttsJson)
+
                     porcupineManager?.stop()
 
                     if (isController()) {
-                        // speakOut("네, 말씀하세요") // RC가 말하도록 서버에 요청
                         Handler(Looper.getMainLooper()).postDelayed({
-                            startSTT() // 0.5초 후 STT 시작
-                        }, 1800)
+                            startSTT()
+                        }, 1600)
                     }
                 }
 
@@ -391,19 +394,31 @@ class PorcupineService : Service() {
 
 
     /** [고급 로직] real_main.py의 parse_voice 로직을 코틀린으로 구현 */
-    private fun parseVoiceCommand(text: String): Pair<String, Float> {
+    private fun parseVoiceCommand(text: String): Triple<String, String, Float> {
+        // ① 한국어 키워드 → 제어 명령 매핑
         val KOR_DIR = mapOf(
             "전진" to "Forward", "앞" to "Forward", "앞으로" to "Forward", "직진" to "Forward",
             "후진" to "Back", "뒤" to "Back", "뒤로" to "Back",
             "좌" to "Forward-Left", "좌회전" to "Forward-Left", "왼쪽" to "Forward-Left",
-            "우" to "Forward-Right", "오른쪽" to "Forward-Right", "우회전" to "Forward-Right",
+            "우" to "Forward-Right", "우회전" to "Forward-Right", "오른쪽" to "Forward-Right",
             "정지" to "Stop", "멈춰" to "Stop", "멈춤" to "Stop", "스톱" to "Stop",
             "전쟁" to "Forward"
         )
+
         var command: String? = null
+        var korCmd: String? = null
+
         for ((k, v) in KOR_DIR) {
             if (text.contains(k)) {
                 command = v
+                korCmd = when (v) {
+                    "Forward" -> "앞으로"
+                    "Back" -> "뒤로"
+                    "Forward-Left" -> "좌회전"
+                    "Forward-Right" -> "우회전"
+                    "Stop" -> "정지"
+                    else -> k
+                }
                 break
             }
         }
@@ -413,63 +428,73 @@ class PorcupineService : Service() {
             if (text.contains("캡처") || text.contains("사진") || text.contains("찍어")) command = "Capture"
         }
 
-        if (command == null) return Pair("Unknown", 0f)
-        if (command == "Stop") return Pair("Stop", 0f)
+        if (command == null) return Triple("Unknown", text, 0f)
+        if (command == "Stop") return Triple("Stop", "정지", 0f)
 
-        // 기본 지속시간 파싱
-        val pattern = Pattern.compile("(\\d+)\\s*초")
-        val matcher = pattern.matcher(text)
-
+        // ② "5초" 같이 숫자+초 패턴 감지
+        val matcher = Pattern.compile("(\\d+)\\s*초").matcher(text)
         val duration = when {
-            matcher.find() -> matcher.group(1)?.toFloatOrNull() ?: 3.0f
-            (command == "Forward-Left" || command == "Forward-Right") -> 3.0f  // ← 기본 5초
+            matcher.find() -> matcher.group(1)?.toFloatOrNull() ?: 5.0f
+            command == "Launch" -> 5.0f   // ✅ 발사는 기본 5초
+            (command == "Forward-Left" || command == "Forward-Right") -> 3.0f
             else -> 1.0f
         }
 
-        return Pair(command, duration)
+
+
+        return Triple(command!!, korCmd ?: command!!, duration)
     }
 
     private fun parseAndRouteStt(text: String) {
         voiceMacroJob?.cancel()
-        val (command, duration) = parseVoiceCommand(text)
+        val (command, korCmd, duration) = parseVoiceCommand(text)
 
         when (command) {
             "Stop" -> {
                 RpiWebSocketManager.sendText(JsonFactory.createConMessage("Stop"))
                 RpiWebSocketManager.sendText(JsonFactory.createTtsRequestMessage("정지합니다"))
+                finishSttSession()
             }
 
             "Launch" -> {
+                // 음성에서 "n초 발사" 감지 → duration 활용
+                val durMs = (duration * 1000).toLong().coerceAtLeast(5000L)  // 최소 0.5초
                 RpiWebSocketManager.sendText(JsonFactory.createJetMessage("Launch"))
+
                 Handler(Looper.getMainLooper()).postDelayed({
                     RpiWebSocketManager.sendText(JsonFactory.createJetMessage("Stop"))
-                }, 500)
-                RpiWebSocketManager.sendText(JsonFactory.createTtsRequestMessage("물을 분사합니다"))
+                    RpiWebSocketManager.sendText(JsonFactory.createTtsRequestMessage("분사를 완료했습니다"))
+                }, durMs)
+
+                RpiWebSocketManager.sendText(JsonFactory.createTtsRequestMessage("물을 ${duration.toInt()}초 동안 분사합니다"))
+                finishSttSession()
             }
 
             "Capture" -> {
                 val intent = Intent(ControllerFragment.ACTION_TRIGGER_CAPTURE)
                 sendBroadcast(intent)
                 RpiWebSocketManager.sendText(JsonFactory.createTtsRequestMessage("사진을 촬영합니다"))
+                finishSttSession()
             }
 
-            // Forward, Back, ForwardLeft, ForwardRight → 전부 동일한 매크로 실행
+            // 🚗 방향 이동 명령 처리
             "Forward", "Back", "Forward-Left", "Forward-Right" -> {
-                val korCmd = KOR_COMMAND[command] ?: command
                 RpiWebSocketManager.sendText(
-                    JsonFactory.createTtsRequestMessage("${korCmd} ${duration.toInt()}초 이동합니다")
+                    JsonFactory.createTtsRequestMessage("$korCmd ${duration.toInt()}초 이동합니다")
                 )
-                runVoiceMacro(command, duration)
+                runVoiceMacro(command, duration) // → 여기서 끝나면 Stop + 완료 TTS + finishSttSession()
             }
 
             else -> {
+                // 일반 대화
                 val sttJson = JsonFactory.createSttMessage(text)
                 sendWhenReady(sttJson)
                 sendStatus("⬆️ 서버로 전송 (대화): $text")
+                finishSttSession()
             }
         }
-        finishSttSession()
     }
+
 
     /* 시간 제어 매크로 실행 */
     private fun runVoiceMacro(command: String, duration: Float) {
@@ -485,6 +510,7 @@ class PorcupineService : Service() {
                 RpiWebSocketManager.sendText(JsonFactory.createConMessage("Stop"))
                 setControlLock(false)
                 RpiWebSocketManager.sendText(JsonFactory.createTtsRequestMessage("명령을 완료했습니다"))
+                finishSttSession() // ✅ 이동이 끝난 뒤에만 호출
             }
         }
     }
@@ -551,12 +577,12 @@ class PorcupineService : Service() {
     }
 
     private fun logConversation(type: String, content: String) {
+        // Broadcast만 유지
         sendBroadcast(Intent(ACTION_LOG_CONVERSATION).apply {
             putExtra(EXTRA_LOG_TYPE, type)
             putExtra(EXTRA_LOG_CONTENT, content)
         })
     }
-
     private fun getAssetFilePath(file: String): String {
         val outFile = File(filesDir, file)
         if (!outFile.exists()) {
