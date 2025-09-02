@@ -12,4 +12,18 @@
     <string name="open_drawer">메뉴 열기</string>
     <string name="close_drawer">메뉴 닫기</string>
 
+
+    <string name="label_tts_voice">TTS 음성 선택</string>
+    <string name="label_tts_rate_default">속도: 1.0</string>
+    <string name="label_tts_pitch_default">피치: 1.0</string>
+    <string name="desc_rate_slider">TTS 속도 조절 슬라이더</string>
+    <string name="desc_pitch_slider">TTS 피치 조절 슬라이더</string>
+    <string name="hint_tts_voice">음성을 선택하세요</string>
+
+
+
+
+
+
+
 </resources>

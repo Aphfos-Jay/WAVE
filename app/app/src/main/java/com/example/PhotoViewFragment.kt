@@ -11,6 +11,11 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.resource.drawable.DrawableTransitionOptions
 import android.widget.TextView
 
+// 캡처된 사진을 전체 화면 다이얼로그로 표시
+// Glide 로 이미지 로딩
+// 분석 결과 텍스트(있을 때만) 같이 보여줌
+// 화면 클릭 시 다이얼로그 닫힘
+
 class PhotoViewFragment : DialogFragment() {
 
     companion object {
@@ -36,7 +41,7 @@ class PhotoViewFragment : DialogFragment() {
 
         val imageView: ImageView = view.findViewById(R.id.fullScreenImageView)
         val progressBar: ProgressBar = view.findViewById(R.id.photoProgressBar)
-        val analysisView: TextView = view.findViewById(R.id.analysisTextView) // ✅ 새로 추가된 뷰
+        val analysisView: TextView = view.findViewById(R.id.analysisTextView)
 
         val url = arguments?.getString(ARG_URL)
         val analysis = arguments?.getString(ARG_ANALYSIS)
@@ -71,7 +76,7 @@ class PhotoViewFragment : DialogFragment() {
                 .into(imageView)
         }
 
-        // ✅ 분석 결과 표시
+        // 분석 결과 표시
         if (!analysis.isNullOrBlank()) {
             analysisView.text = analysis
             analysisView.visibility = View.VISIBLE

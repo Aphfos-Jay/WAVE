@@ -11,6 +11,16 @@ import kotlin.math.atan2
 import kotlin.math.pow
 import kotlin.math.sqrt
 
+
+// 화면에 표시되는 커스텀 조이스틱 뷰
+// 원형 배경 + 이동 가능한 작은 원(스틱)
+// 터치 위치를 정규화(-1.0~1.0)해서 콜백으로 전달
+// ControllerFragment에서 JoystickListener 구현체를 받아서 제어 명령 전송
+
+
+
+// 조이스틱 움직임을 외부로 알릴 때 사용하는 인터페이스
+// xPos, yPos는 -1.0 ~ 1.0 범위로 정규화된 좌표
 interface JoystickListener {
     fun onJoystickMoved(xPos: Float, yPos: Float)
 }
@@ -52,6 +62,8 @@ class JoystickView @JvmOverloads constructor(
         typedArray.recycle()
     }
 
+    // 뷰 크기가 결정될 때 호출됨
+    // 중심 좌표와 조이스틱 반경 계산
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         centerX = w / 2f
@@ -70,6 +82,10 @@ class JoystickView @JvmOverloads constructor(
         canvas.drawCircle(joystickPositionX, joystickPositionY, joystickRadius, joystickPaint)
     }
 
+    // 터치 이벤트 처리
+    // 손가락 위치를 계산해서 스틱 좌표 업데이트
+    // deadzone 없이 중심에서 -1~1 범위로 정규화해 전달
+    // 손을 떼면 스틱을 원래 위치(중앙)으로 복귀
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.action) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {

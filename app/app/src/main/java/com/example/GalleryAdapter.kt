@@ -10,15 +10,21 @@ import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
 import com.bumptech.glide.Glide
 
-// 각 사진 아이템의 데이터를 담을 클래스
+// 갤러리 화면에서 쓸 RecyclerView 어댑터
+// 서버/로컬에서 가져온 사진 목록(PhotoItem)을 표시
+// 썸네일 + 촬영 시간 + 분석 여부 뱃지 출력
+
+
+// 개별 사진 데이터 모델
 data class PhotoItem(
     val id: String,
     val datetime: String,
     val thumbnailUrl: String,
-    var analysis: String? = null   // ✅ CapAnalysis 결과 저장
+    var analysis: String? = null
 )
 
-// ✅ DiffUtil 구현
+
+// 리스트 갱신 시 변경된 아이템만 효율적으로 업데이트
 object PhotoDiffCallback : DiffUtil.ItemCallback<PhotoItem>() {
     override fun areItemsTheSame(oldItem: PhotoItem, newItem: PhotoItem): Boolean {
         return oldItem.id == newItem.id
@@ -47,7 +53,9 @@ class GalleryAdapter(
     class PhotoViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val imageView: ImageView = itemView.findViewById(R.id.photoImageView)
         private val dateView: TextView = itemView.findViewById(R.id.dateTextView)
-        private val badgeView: TextView = itemView.findViewById(R.id.analysisBadge) // ✅ 추가
+        private val badgeView: TextView = itemView.findViewById(R.id.analysisBadge)
+
+        // // 아이템 데이터 → UI에 바인딩
 
         fun bind(item: PhotoItem, onItemClick: (PhotoItem) -> Unit) {
             dateView.text = if (!item.analysis.isNullOrBlank()) {
@@ -62,7 +70,7 @@ class GalleryAdapter(
                 .placeholder(R.drawable.ic_launcher_background)
                 .into(imageView)
 
-            // ✅ 분석 결과 있음/없음에 따라 뱃지 표시
+            // 분석 결과 있음/없음에 따라 뱃지 표시
             if (!item.analysis.isNullOrBlank()) {
                 badgeView.visibility = View.VISIBLE
             } else {
