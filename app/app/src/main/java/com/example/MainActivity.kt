@@ -10,15 +10,8 @@ import androidx.drawerlayout.widget.DrawerLayout
 import androidx.fragment.app.Fragment
 import com.google.android.material.navigation.NavigationView
 
-// 앱 실행 시 처음 열리는 Activity
-// RC 모드 / 조종기 모드 선택
-// Drawer(NavigationView) 메뉴 세팅
-// WebSocket & PorcupineService 초기 연결 관리
-
 class MainActivity : AppCompatActivity() {
 
-    // 앱 전역에서 쓰는 기본 설정값
-    // app_mode: "rc" 또는 "controller"
     companion object {
         const val PREFS = "app_prefs"
         const val KEY_MODE = "app_mode" // "rc" | "controller"
@@ -52,10 +45,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // DrawerLayout & NavigationView 초기 설정
-    // 모드에 따라 메뉴 항목 표시 제어 (갤러리 버튼은 Controller 모드에서만)
-    // 메뉴 선택 시 해당 Fragment로 전환
-    // 툴바 + 햄버거 버튼 동기화
     private fun setupNavigationDrawer() {
         val isControllerMode = (getAppMode() == "controller")
 
@@ -70,7 +59,6 @@ class MainActivity : AppCompatActivity() {
                     replaceFragment(fragment)
                 }
                 R.id.nav_gallery -> replaceFragment(GalleryFragment())
-                R.id.nav_settings -> replaceFragment(SettingsFragment())
             }
             drawerLayout.closeDrawers()
             true
@@ -91,21 +79,17 @@ class MainActivity : AppCompatActivity() {
         toggle.drawerArrowDrawable.color = ContextCompat.getColor(this, android.R.color.white)
     }
 
-
-    // Activity 종료 시 서버 WebSocket 연결 해제
     override fun onDestroy() {
         super.onDestroy()
         WebSocketManager.getInstance().disconnect()
     }
 
-    // 화면(Fragment) 교체 함수
     private fun replaceFragment(fragment: Fragment) {
         supportFragmentManager.beginTransaction()
             .replace(R.id.nav_host_fragment, fragment)
             .commit()
     }
 
-    // 호출어 감지/음성 인식을 위한 Foreground Service 실행
     private fun startPorcupineServiceOnce() {
         val intent = Intent(this, PorcupineService::class.java).apply {
             action = PorcupineService.ACTION_START_FOREGROUND_SERVICE
@@ -113,7 +97,6 @@ class MainActivity : AppCompatActivity() {
         ContextCompat.startForegroundService(this, intent)
     }
 
-    // 권한 요청 결과 처리 → 성공 시 서버 연결 + PorcupineService 시작
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -130,7 +113,6 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    // 현재 저장된 앱 모드 반환 ("rc" 또는 "controller")
     private fun ensureAppModeChosen(next: () -> Unit) {
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
         val saved = prefs.getString(KEY_MODE, null)
@@ -142,7 +124,7 @@ class MainActivity : AppCompatActivity() {
                     prefs.edit().putString(KEY_MODE, mode).apply()
                     WebSocketManager.setClientId(if (mode == "rc") "android_rc" else "android_ctrl")
 
-                    // RPi WebSocket 연결
+                    // ✅ RPi WebSocket 연결
                     val clientId = if (mode == "rc") "android_rc" else "android_ctrl"
                     RpiWebSocketManager.connect(BuildConfig.RPI_IP, BuildConfig.RPI_PORT.toInt(), clientId)
 
@@ -153,13 +135,9 @@ class MainActivity : AppCompatActivity() {
         } else {
             WebSocketManager.setClientId(if (saved == "rc") "android_rc" else "android_ctrl")
 
-            // RPi WebSocket 연결
+            // ✅ RPi WebSocket 연결
             val clientId = if (saved == "rc") "android_rc" else "android_ctrl"
-            RpiWebSocketManager.connect(
-                BuildConfig.RPI_IP,
-                BuildConfig.RPI_PORT,
-                clientId
-            )
+            RpiWebSocketManager.connect("192.168.137.234", 9080, clientId)
 
             next()
         }

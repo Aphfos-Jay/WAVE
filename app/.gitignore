@@ -11,7 +11,7 @@ build/
 
 # Local configuration 
 local.properties
-signing.properties 
+signing.properties   # ← 혹시 서명용 properties 쓰면 추가
 
 # Log/OS files
 *.log

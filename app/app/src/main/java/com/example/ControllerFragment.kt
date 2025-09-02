@@ -38,17 +38,8 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.Date
 
-// 조종기(Controller) 모드의 메인 화면.
-// - RC 쪽 영상 스트리밍을 받아 보여줌
-// - 조이스틱/버튼 입력을 TCP·WebSocket으로 RC에 전달
-// - 캡처 촬영 및 서버 업로드 로직 포함
-
-
-
 class ControllerFragment : Fragment(), JoystickListener {
 
-
-    // RC 쪽에서 캡처 트리거 요청할 때 브로드캐스트로 사용
     companion object {
         const val ACTION_TRIGGER_CAPTURE = "com.example.remote.ACTION_TRIGGER_CAPTURE"
     }
@@ -96,14 +87,14 @@ class ControllerFragment : Fragment(), JoystickListener {
                     uploadImageToUrl(uploadUrl, bytes) { success ->
                         if (success) {
                             lastCaptureBytes = null
-                            Log.i("ControllerFragment", "캡처 업로드 완료 (GcsUri=$lastGcsUri)")
+                            Log.i("ControllerFragment", "✅ 캡처 업로드 완료 (GcsUri=$lastGcsUri)")
                         } else {
-                            Log.w("ControllerFragment", "업로드 실패 → lastCaptureBytes 유지 (재시도 가능)")
+                            Log.w("ControllerFragment", "⚠️ 업로드 실패 → lastCaptureBytes 유지 (재시도 가능)")
                         }
                     }
                 }
             } catch (e: Exception) {
-                Log.e("ControllerFragment", "CapUploadInitResult 처리 실패", e)
+                Log.e("ControllerFragment", "❌ CapUploadInitResult 처리 실패", e)
             }
         }
     }
@@ -119,14 +110,14 @@ class ControllerFragment : Fragment(), JoystickListener {
                 }
                 PorcupineService.ACTION_SET_CONTROL_LOCK -> {
                     isControlLocked = intent.getBooleanExtra(PorcupineService.EXTRA_IS_LOCKED, false)
-                    Log.i("ControllerFragment", "제어 잠금 상태 변경: $isControlLocked")
+                    Log.i("ControllerFragment", "🕹️ 제어 잠금 상태 변경: $isControlLocked")
                     joystick.alpha = if (isControlLocked) 0.5f else 1.0f
                 }
             }
         }
     }
 
-    // 1. 화면 회전 시 프래그먼트 객체를 유지하도록 설정
+    // ✅ [1단계] 화면 회전 시 프래그먼트 객체를 유지하도록 설정
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         retainInstance = true
@@ -173,26 +164,23 @@ class ControllerFragment : Fragment(), JoystickListener {
         ContextCompat.registerReceiver(requireContext(), captureReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
-
-    // NSD(Network Service Discovery)를 통해 RC 스트리밍 서비스 검색
-    // 서비스 발견 시 → resolve 후 TCP 연결 시작
     private fun createDiscoveryListener(): NsdManager.DiscoveryListener {
         return object : NsdManager.DiscoveryListener {
-            override fun onDiscoveryStarted(regType: String) { Log.i("ControllerFragment", "서비스 검색 시작: $regType") }
+            override fun onDiscoveryStarted(regType: String) { Log.i("ControllerFragment", "🔍 서비스 검색 시작: $regType") }
             override fun onServiceFound(service: NsdServiceInfo) {
-                Log.i("ControllerFragment", "서비스 발견: ${service.serviceName}")
+                Log.i("ControllerFragment", "✅ 서비스 발견: ${service.serviceName}")
                 if (service.serviceType == "_rcstream._tcp." && service.serviceName.contains("RcStreamService")) {
                     if (!isResolving) {
                         isResolving = true
                         nsdManager.resolveService(service, object : NsdManager.ResolveListener {
                             override fun onServiceResolved(resolved: NsdServiceInfo) {
                                 isResolving = false
-                                Log.i("ControllerFragment", "서비스 해결됨: ${resolved.host.hostAddress}:${resolved.port}")
+                                Log.i("ControllerFragment", "🎯 서비스 해결됨: ${resolved.host.hostAddress}:${resolved.port}")
                                 uiHandler.post { connTxt.text = "연결됨" }
                                 startTcpClient(resolved.host.hostAddress!!, resolved.port)
                             }
                             override fun onResolveFailed(serviceInfo: NsdServiceInfo?, errorCode: Int) {
-                                Log.e("ControllerFragment", "서비스 해결 실패: $errorCode")
+                                Log.e("ControllerFragment", "❌ 서비스 해결 실패: $errorCode")
                                 isResolving = false
                             }
                         })
@@ -200,18 +188,18 @@ class ControllerFragment : Fragment(), JoystickListener {
                 }
             }
             override fun onServiceLost(service: NsdServiceInfo) {
-                Log.w("ControllerFragment", "⚠서비스 사라짐: ${service.serviceName}")
+                Log.w("ControllerFragment", "⚠️ 서비스 사라짐: ${service.serviceName}")
                 uiHandler.post { connTxt.text = "연결 끊김" }
             }
-            override fun onDiscoveryStopped(serviceType: String) { Log.i("ControllerFragment", "서비스 검색 중지: $serviceType") }
-            override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) { Log.e("ControllerFragment", "검색 시작 실패: $errorCode") }
-            override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) { Log.e("ControllerFragment", "검색 중지 실패: $errorCode") }
+            override fun onDiscoveryStopped(serviceType: String) { Log.i("ControllerFragment", "🛑 서비스 검색 중지: $serviceType") }
+            override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) { Log.e("ControllerFragment", "❌ 검색 시작 실패: $errorCode") }
+            override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) { Log.e("ControllerFragment", "❌ 검색 중지 실패: $errorCode") }
         }
     }
 
     private fun discoverRcService() {
         nsdManager = requireContext().getSystemService(Context.NSD_SERVICE) as NsdManager
-        Log.i("ControllerFragment", "📡 서비스 검색 시작")
+        Log.i("ControllerFragment", "📡 RC 서비스 검색 시작")
         nsdManager.discoverServices("_rcstream._tcp.", NsdManager.PROTOCOL_DNS_SD, discoveryListener)
     }
 
@@ -250,9 +238,6 @@ class ControllerFragment : Fragment(), JoystickListener {
         }
     }
 
-
-    // 조이스틱/음성 등에서 만들어진 제어 JSON을 RC로 송신
-    // TCP 연결이 안 되어 있으면 무시
     private fun sendControlCommand(commandJson: String) {
         networkExecutor.execute {
             if (writer == null) {
@@ -268,8 +253,6 @@ class ControllerFragment : Fragment(), JoystickListener {
         }
     }
 
-
-    // RC에서 찍은 캡처 이미지를 서버 업로드
     private fun uploadCaptureToCloud(bytes: ByteArray) {
         lastCaptureBytes = bytes
         val initMsg = JsonFactory.createCaptureRequestMessage()
@@ -284,7 +267,7 @@ class ControllerFragment : Fragment(), JoystickListener {
                 val request = Request.Builder().url(url).put(body).build()
                 val response = client.newCall(request).execute()
                 if (response.isSuccessful) {
-                    Log.i("ControllerFragment", "캡처 업로드 성공")
+                    Log.i("ControllerFragment", "✅ 캡처 업로드 성공")
                     val msg = JsonFactory.createCapMeta(
                         datetime = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date()),
                         lat = currentLat,
@@ -293,14 +276,14 @@ class ControllerFragment : Fragment(), JoystickListener {
                         gcsUri = lastGcsUri ?: ""
                     )
                     ws.sendText(msg)
-                    Log.i("ControllerFragment", "Cap 메타데이터 전송 완료")
+                    Log.i("ControllerFragment", "✅ Cap 메타데이터 전송 완료")
                     callback(true)
                 } else {
-                    Log.e("ControllerFragment", "캡처 업로드 실패: ${response.code}")
+                    Log.e("ControllerFragment", "❌ 캡처 업로드 실패: ${response.code}")
                     callback(false)
                 }
             } catch (e: Exception) {
-                Log.e("ControllerFragment", "업로드 오류", e)
+                Log.e("ControllerFragment", "❌ 업로드 오류", e)
                 callback(false)
             }
         }
@@ -337,12 +320,10 @@ class ControllerFragment : Fragment(), JoystickListener {
     fun triggerCapture() {
         if (!isControlLocked) {
             sendControlCommand(JsonFactory.createCaptureRequestMessage())
-            Log.d("ControllerFragment", "RC에 CaptureRequest 전송 (공통 메소드)")
+            Log.d("ControllerFragment", "📤 RC에 CaptureRequest 전송 (공통 메소드)")
         }
     }
 
-
-    //조이스틱을 방향에 따라 8개의 명령어로 분할
     override fun onJoystickMoved(xPos: Float, yPos: Float) {
         if (isControlLocked) return
         val distance = sqrt(xPos.pow(2) + yPos.pow(2))
@@ -376,24 +357,24 @@ class ControllerFragment : Fragment(), JoystickListener {
                 if (location != null) {
                     currentLat = location.latitude
                     currentLng = location.longitude
-                    Log.i("ControllerFragment", "현재 위치 업데이트: ($currentLat, $currentLng)")
+                    Log.i("ControllerFragment", "📍 현재 위치 업데이트: ($currentLat, $currentLng)")
                 }
             }
         } else {
-            Log.w("ControllerFragment", "위치 권한 없음, 기본 좌표 사용")
+            Log.w("ControllerFragment", "⚠️ 위치 권한 없음, 기본 좌표 사용")
         }
     }
 
-    // 뷰와 관련된 리스너만 정리
+    // ✅ [3단계] onDestroyView()에서는 뷰와 관련된 리스너만 정리
     override fun onDestroyView() {
         super.onDestroyView()
         ws.removeEventListener(fragmentWsListener)
         requireContext().unregisterReceiver(serviceCommandReceiver)
         requireContext().unregisterReceiver(captureReceiver)
-
+        // ❌ 네트워크 연결을 끊는 코드는 여기서 모두 제거
     }
 
-    // 실제 네트워크 연결 자원 정리
+    // ✅ [3단계] onDestroy()에서 실제 네트워크 연결 자원을 정리
     override fun onDestroy() {
         super.onDestroy()
         try {

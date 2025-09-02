@@ -20,11 +20,6 @@ import java.util.Date
 import java.util.Locale
 import android.content.Context
 
-// 클라우드에 업로드된 사진 목록을 불러와서 보여주는 화면.
-// WebSocket으로 서버에 사진 목록/분석 결과 요청
-// 로컬 SharedPreferences에 저장된 분석 결과를 같이 표시
-// 사진 클릭 시 전체 화면 다이얼로그로 열기
-
 class GalleryFragment : Fragment() {
 
     private lateinit var galleryRecyclerView: RecyclerView
@@ -40,7 +35,7 @@ class GalleryFragment : Fragment() {
     private val fragmentWsListener: (type: String, content: String) -> Unit = { type, content ->
         uiHandler.post {
             when (type) {
-                // 사진 목록 요청 응답
+                // ✅ 사진 목록 요청 응답
                 "FindCapResult" -> {
                     progressBar.visibility = View.GONE
                     try {
@@ -52,7 +47,7 @@ class GalleryFragment : Fragment() {
                             val item = jsonArray.getJSONObject(i)
                             val id = item.getString("id")
 
-                            // 로컬 저장된 분석 결과 불러오기
+                            // 🔹 로컬 저장된 분석 결과 불러오기
                             val prefs = requireContext().getSharedPreferences("analysis_store", Context.MODE_PRIVATE)
                             val analysisResult = prefs.getString(id, null)
 
@@ -78,7 +73,7 @@ class GalleryFragment : Fragment() {
                     }
                 }
 
-                // 단일 사진 요청
+                // ✅ 단일 사진 요청
                 "CapGetResult" -> {
                     try {
                         val jsonObject = JSONObject(content)
@@ -92,7 +87,7 @@ class GalleryFragment : Fragment() {
                     }
                 }
 
-                // AI 분석 결과 수신
+                // ✅ AI 분석 결과 수신
                 "CapAnalysis" -> {
                     progressBar.visibility = View.GONE
                     try {
@@ -100,11 +95,11 @@ class GalleryFragment : Fragment() {
                         val id = json.getString("ID")
                         val analysis = json.getString("result")
 
-                        // 로컬 저장 (SharedPreferences)
+                        // 🔹 로컬 저장 (SharedPreferences)
                         val prefs = requireContext().getSharedPreferences("analysis_store", Context.MODE_PRIVATE)
                         prefs.edit().putString(id, analysis).apply()
 
-                        // 현재 리스트에도 반영
+                        // 🔹 현재 리스트에도 반영
                         val index = photoList.indexOfFirst { it.id == id }
                         if (index != -1) {
                             val updatedItem = photoList[index].copy(analysis = analysis)

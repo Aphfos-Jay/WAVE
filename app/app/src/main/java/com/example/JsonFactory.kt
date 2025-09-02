@@ -5,9 +5,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-
-// 서버/RPi와 주고받는 메시지를 JSON 문자열로 만들어주는 헬퍼
-// Type / Datetime / Value 같은 공통 키를 맞추는 용도
 object JsonFactory {
 
     private fun nowString(): String {
@@ -18,7 +15,6 @@ object JsonFactory {
 
     // ====== RC/조종 공통 ======
 
-    // RC 제어 명령 (방향, 전진/후진 등)
     fun createConMessage(value: String): String =
         JSONObject().apply {
             put("Type", "Con")
@@ -26,7 +22,6 @@ object JsonFactory {
             put("Value", value)
         }.toString()
 
-    // 물 분사(Launch/Stop) 제어 명령
     fun createJetMessage(value: String): String =
         JSONObject().apply {
             put("Type", "Jet")
@@ -34,7 +29,6 @@ object JsonFactory {
             put("Value", value)
         }.toString()
 
-    // 음성 인식 결과를 서버로 보낼 때 사용
     fun createSttMessage(text: String): String =
         JSONObject().apply {
             put("Type", "Stt")
@@ -42,14 +36,12 @@ object JsonFactory {
             put("Text", text)
         }.toString()
 
-    // 서버→RC TTS 출력 요청
     fun createTtsRequestMessage(text: String): String =
         JSONObject().apply {
             put("Type", "Tts")
             put("Datetime", nowString())
             put("Text", text)
         }.toString()
-
 
     // ====== 캡처 관련 ======
 

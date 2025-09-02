@@ -6,12 +6,6 @@ import android.util.Log
 import okhttp3.*
 import java.util.concurrent.TimeUnit
 
-// WebSocket 통신을 관리하는 싱글톤
-// connect(): 연결 시작
-// sendText(): 메시지 전송
-// add/removeEventListener(): 수신 콜백 등록
-// disconnect(): 수동 종료
-
 object RpiWebSocketManager {
 
     private var webSocket: WebSocket? = null
@@ -24,9 +18,9 @@ object RpiWebSocketManager {
 
     private var rpiUrl: String = ""
 
-
+    /** 라즈베리파이 서버 연결 */
     fun connect(ip: String, port: Int = 9000, clientId: String = "android_client") {
-        // clientId를 URL에 쿼리로 붙임
+        // ✅ clientId를 URL에 쿼리로 붙임
         val type = clientId
         rpiUrl = "ws://$ip:$port/ws?type=$type&id=$clientId"
         val request = Request.Builder().url(rpiUrl).build()
@@ -55,7 +49,7 @@ object RpiWebSocketManager {
         })
     }
 
-    //JSON 전송
+    /** JSON 전송 */
     fun sendText(msg: String) {
         if (webSocket == null) {
             Log.w("RpiWS", "⚠️ 전송 실패 (연결 없음)")
@@ -65,7 +59,7 @@ object RpiWebSocketManager {
         webSocket?.send(msg)
     }
 
-    //수신 리스너 등록
+    /** 수신 리스너 등록 */
     fun addEventListener(l: (String, String) -> Unit) {
         if (!listeners.contains(l)) listeners.add(l)
     }
@@ -77,6 +71,6 @@ object RpiWebSocketManager {
     fun disconnect() {
         webSocket?.close(1000, "bye")
         webSocket = null
-        Log.i("RpiWS", "수동 연결 종료")
+        Log.i("RpiWS", "🛑 수동 연결 종료")
     }
 }

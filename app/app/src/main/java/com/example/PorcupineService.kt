@@ -21,11 +21,6 @@ import java.util.*
 import java.util.regex.Pattern
 import org.json.JSONObject
 
-// 백그라운드 음성 관련 서비스
-// Picovoice Porcupine으로 호출어 감지
-// Controller 모드: STT → 서버 전송
-// RC 모드: 서버에서 온 TTS 출력 전담
-// 음성 기반 제어 명령/대화 처리 + WebSocket 통신 + TTS 실행
 
 class PorcupineService : Service() {
 
@@ -36,7 +31,7 @@ class PorcupineService : Service() {
     private lateinit var wsManager: WebSocketManager
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var voiceMacroJob: Job? = null // 음성 매크로 실행을 제어하기 위한 Job
+    private var voiceMacroJob: Job? = null // << 음성 매크로 실행을 제어하기 위한 Job
 
     private val KOR_COMMAND = mapOf(
         "Forward" to "앞으로",
@@ -62,7 +57,7 @@ class PorcupineService : Service() {
         const val ACTION_SEND_CONTROL_COMMAND = "com.example.remote.SEND_CONTROL"
         const val EXTRA_CONTROL_COMMAND_JSON = "control_json"
 
-        // 제어 락(Lock) 상태를 전달하기 위한 Action 추가
+        // << 제어 락(Lock) 상태를 전달하기 위한 Action 추가
         const val ACTION_SET_CONTROL_LOCK = "com.example.remote.SET_LOCK"
         const val EXTRA_IS_LOCKED = "is_locked"
     }
@@ -86,7 +81,7 @@ class PorcupineService : Service() {
                 }
             }
 
-            // CapAnalysis 처리 추가
+            // ✅ CapAnalysis 처리 추가
             "CapAnalysis" -> {
                 try {
                     val json = JSONObject(content)
@@ -97,7 +92,7 @@ class PorcupineService : Service() {
                         "분석 결과를 확인해 주세요."
                     else summary
 
-                    // 로컬 SharedPreferences에 저장
+                    // ✅ 로컬 SharedPreferences에 저장
                     saveAnalysisToPrefs(id, resultText)
 
                     // 1) RC로 요약본 TTS 전송
@@ -116,13 +111,13 @@ class PorcupineService : Service() {
             }
 
 
-            // Agent응답 처리 추가
+            // ✅ GPT 응답 처리 추가
             "SttResult" -> {
                 try {
                     val json = JSONObject(content)
                     val reply = json.optString("Text", content)
 
-                    // RC가 읽을 수 있도록 Tts 형식으로 변환
+                    // ✅ RC가 읽을 수 있도록 Tts 형식으로 변환
                     val msg = JsonFactory.createTtsRequestMessage(reply)
 
                     RpiWebSocketManager.sendText(msg)
@@ -180,7 +175,7 @@ class PorcupineService : Service() {
             ACTION_STOP_STT -> stopSTT()
             ACTION_SPEAK_OUT -> {
                 val text = intent.getStringExtra(EXTRA_TEXT_TO_SPEAK)
-                Log.d("PorcupineService", "TTS 브로드캐스트 수신: $text")
+                Log.d("PorcupineService", "🔊 TTS 브로드캐스트 수신: $text")
                 if (text != null && shouldSpeak()) speakOut(text)
             }
         }
@@ -221,23 +216,20 @@ class PorcupineService : Service() {
         startForeground(1, notification)
     }
 
-
-
-    // TTS 기본 설정 - 현재는 남성 목소리로 강제 설정되었습니다
     private fun initTextToSpeech() {
-        tts = TextToSpeech(this) { status ->
-            if (status == TextToSpeech.SUCCESS) {
-                tts?.language = Locale.KOREAN
-
-                // Voice를 이름으로 직접 지정
-                val maleVoice = tts?.voices?.find { it.name == "ko-kr-x-koc-local" }
-                if (maleVoice != null) {
-                    tts?.voice = maleVoice
-                } else {
+        tts = TextToSpeech(this) {
+            if (it != TextToSpeech.SUCCESS) log("TTS 초기화 실패")
+        }.apply {
+            this?.language = Locale.KOREAN
+            this?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+                override fun onDone(utteranceId: String?) {
+                    if (utteranceId == "utterance_tts" && isController()) {
+                        porcupineManager?.start()
+                    }
                 }
-            } else {
-                log("TTS 초기화 실패")
-            }
+                override fun onError(utteranceId: String?) { log("TTS 오류 발생: $utteranceId") }
+                override fun onStart(utteranceId: String?) { log("TTS 시작됨: $utteranceId") }
+            })
         }
     }
 
@@ -282,7 +274,7 @@ class PorcupineService : Service() {
                     sendStatus("🟢 호출어 인식됨")
                     logConversation("Hotword", "호출어가 감지되었습니다")
 
-                    // RC에서 바로 "네, 말씀하세요" 발화
+                    // ✅ RC에서 바로 "네, 말씀하세요" 발화
                     val ttsJson = JsonFactory.createTtsRequestMessage("네, 말씀하세요")
                     RpiWebSocketManager.sendText(ttsJson)
 
@@ -323,7 +315,7 @@ class PorcupineService : Service() {
             }
 
             override fun onError(error: Int) {
-
+                // ... (기존 onError 코드와 동일) ...
                 val errorMessage = when (error) {
                     SpeechRecognizer.ERROR_AUDIO -> "오디오 녹음 오류 (ERROR_AUDIO)"
                     SpeechRecognizer.ERROR_CLIENT -> "클라이언트 오류 (ERROR_CLIENT)"
@@ -336,7 +328,7 @@ class PorcupineService : Service() {
                     SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "음성 입력 시간 초과 (ERROR_SPEECH_TIMEOUT)"
                     else -> "알 수 없는 오류: $error"
                 }
-                sendStatus("STT 오류: $errorMessage")
+                sendStatus("❌ STT 오류: $errorMessage")
                 finishSttSession()
             }
 
@@ -349,7 +341,7 @@ class PorcupineService : Service() {
         })
     }
 
-    //STT 세션을 종료하고 Porcupine을 재시작하는 공통 함수
+    /** STT 세션을 종료하고 Porcupine을 재시작하는 공통 함수 */
     private fun finishSttSession() {
         sendBroadcast(Intent("com.example.remote.STT_ENDED"))
         Handler(Looper.getMainLooper()).postDelayed({
@@ -401,11 +393,9 @@ class PorcupineService : Service() {
 
 
 
-    // 음성 텍스트 → 제어 명령 변환
-    // 한국어 키워드 매핑 (앞/뒤/좌/우/정지/발사/캡처)
-    // "n초" 패턴 감지해서 duration 추출 (없으면 기본값 사용)
+    /** [고급 로직] real_main.py의 parse_voice 로직을 코틀린으로 구현 */
     private fun parseVoiceCommand(text: String): Triple<String, String, Float> {
-        // 한국어 키워드 → 제어 명령 매핑
+        // ① 한국어 키워드 → 제어 명령 매핑
         val KOR_DIR = mapOf(
             "전진" to "Forward", "앞" to "Forward", "앞으로" to "Forward", "직진" to "Forward",
             "후진" to "Back", "뒤" to "Back", "뒤로" to "Back",
@@ -441,7 +431,7 @@ class PorcupineService : Service() {
         if (command == null) return Triple("Unknown", text, 0f)
         if (command == "Stop") return Triple("Stop", "정지", 0f)
 
-        // "5초" 같이 숫자+초 패턴 감지
+        // ② "5초" 같이 숫자+초 패턴 감지
         val matcher = Pattern.compile("(\\d+)\\s*초").matcher(text)
         val duration = when {
             matcher.find() -> matcher.group(1)?.toFloatOrNull() ?: 5.0f
@@ -455,13 +445,6 @@ class PorcupineService : Service() {
         return Triple(command!!, korCmd ?: command!!, duration)
     }
 
-
-    // STT 결과를 실제 동작으로 분기
-    // Stop → 즉시 정지
-    // Launch → n초 동안 물 분사
-    // Capture → 사진 촬영 요청
-    // 방향(Forward/Back/Left/Right) → runVoiceMacro()로 일정 시간 이동
-    // 그 외 → 일반 대화로 서버 전송
     private fun parseAndRouteStt(text: String) {
         voiceMacroJob?.cancel()
         val (command, korCmd, duration) = parseVoiceCommand(text)
@@ -494,7 +477,7 @@ class PorcupineService : Service() {
                 finishSttSession()
             }
 
-            // 방향 이동 명령 처리
+            // 🚗 방향 이동 명령 처리
             "Forward", "Back", "Forward-Left", "Forward-Right" -> {
                 RpiWebSocketManager.sendText(
                     JsonFactory.createTtsRequestMessage("$korCmd ${duration.toInt()}초 이동합니다")
@@ -506,14 +489,14 @@ class PorcupineService : Service() {
                 // 일반 대화
                 val sttJson = JsonFactory.createSttMessage(text)
                 sendWhenReady(sttJson)
-                sendStatus("⬆서버로 전송 (대화): $text")
+                sendStatus("⬆️ 서버로 전송 (대화): $text")
                 finishSttSession()
             }
         }
     }
 
 
-    //시간 제어 매크로 실행
+    /* 시간 제어 매크로 실행 */
     private fun runVoiceMacro(command: String, duration: Float) {
         voiceMacroJob = serviceScope.launch {
             setControlLock(true)
@@ -527,7 +510,7 @@ class PorcupineService : Service() {
                 RpiWebSocketManager.sendText(JsonFactory.createConMessage("Stop"))
                 setControlLock(false)
                 RpiWebSocketManager.sendText(JsonFactory.createTtsRequestMessage("명령을 완료했습니다"))
-                finishSttSession() //이동이 끝난 뒤에만 호출
+                finishSttSession() // ✅ 이동이 끝난 뒤에만 호출
             }
         }
     }
@@ -539,7 +522,7 @@ class PorcupineService : Service() {
         sendBroadcast(intent)
     }
 
-    //조이스틱 제어 잠금/해제 상태를 Broadcast로 ControllerFragment에 전달
+    /** 조이스틱 제어 잠금/해제 상태를 Broadcast로 ControllerFragment에 전달 */
     private fun setControlLock(isLocked: Boolean) {
         val intent = Intent(ACTION_SET_CONTROL_LOCK).apply {
             putExtra(EXTRA_IS_LOCKED, isLocked)
@@ -547,7 +530,7 @@ class PorcupineService : Service() {
         sendBroadcast(intent)
     }
 
-
+    // ... (나머지 함수들은 기존과 동일) ...
     private fun startSTT() {
         if (!isController()) {
             sendStatus("RC 모드에서는 STT가 비활성입니다.")
@@ -555,7 +538,7 @@ class PorcupineService : Service() {
         }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
             != PackageManager.PERMISSION_GRANTED) {
-            sendStatus("마이크 권한이 없습니다.")
+            sendStatus("🎤 마이크 권한이 없습니다.")
             return
         }
         speechRecognizer?.startListening(recognizerIntent)
