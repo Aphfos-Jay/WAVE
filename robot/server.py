@@ -1,4 +1,6 @@
 # server.py
+# WebSocket 서버 및 클라이언트 관리
+
 import json
 from typing import Dict, Set
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -13,6 +15,8 @@ app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 # 클라이언트 관리
+# android_ctrl: 제어 앱
+# android_rc: 원격 카메라 앱
 clients_by_type: Dict[str, Set[WebSocket]] = {"android_ctrl": set(), "android_rc": set()}
 clients_by_id: Dict[str, WebSocket] = {}
 
@@ -32,6 +36,7 @@ async def send_to_id(target_id:str,payload:dict):
     ws=clients_by_id.get(target_id)
     if ws: await safe_send(ws,text)
 
+# android_ctrl -> android_rc 전달
 @app.websocket("/ws")
 async def ws_endpoint(ws:WebSocket):
     await ws.accept()

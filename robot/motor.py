@@ -1,12 +1,16 @@
 # motor.py
+# 모터, 펌프 초기화 및 제어
+
 import RPi.GPIO as GPIO
 import time, atexit
 
 # 핀 설정
+# M1: 좌/우, M2: 전/후
 M1_ENA, M1_IN1, M1_IN2 = 12, 23, 24
 M2_ENB, M2_IN3, M2_IN4 = 13, 25, 8
 PUMP_PIN = 17
 
+#PWM 설정
 SPEED_STEER = 100
 SPEED_DRIVE = 100
 RELAY_ACTIVE_HIGH = True
@@ -19,7 +23,7 @@ pwm_m1 = None
 pwm_m2 = None
 hose_active = False
 
-# 초기화
+# GPIO 초기화
 def bootstrap():
     GPIO.setwarnings(False)
     try: GPIO.cleanup()
@@ -29,6 +33,7 @@ def bootstrap():
     GPIO.setup([M1_ENA, M1_IN1, M1_IN2, M2_ENB, M2_IN3, M2_IN4], GPIO.OUT)
     GPIO.setup(PUMP_PIN, GPIO.OUT, initial=PUMP_OFF_LEVEL)
 
+# PWM 생성 및 종료
 def create_pwm():
     global pwm_m1, pwm_m2
     pwm_m1 = GPIO.PWM(M1_ENA, 1000); pwm_m1.start(0)
@@ -42,6 +47,7 @@ def stop_pwm():
     except: pass
     pwm_m1 = pwm_m2 = None
 
+# 종료시 모터 및 펌프 정지
 def cleanup_all():
     stop_all(); pump_off()
     stop_pwm()
@@ -52,8 +58,10 @@ def cleanup_all():
 atexit.register(cleanup_all)
 
 # 모터 제어
+# duty: 0~100 고정
 def _clip(x): return max(0, min(100, x))
 
+# M1: 좌/우, M2: 전/후
 def m1_left(duty=SPEED_STEER):
     GPIO.output(M1_IN1, GPIO.HIGH); GPIO.output(M1_IN2, GPIO.LOW)
     if pwm_m1: pwm_m1.ChangeDutyCycle(_clip(duty))
@@ -94,4 +102,5 @@ def pump_off():
     if hose_active: print("[PUMP] OFF")
     hose_active = False
 
+# 펌프 상태 확인
 def pump_is_active(): return hose_active
