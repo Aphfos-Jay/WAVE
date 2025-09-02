@@ -11,4 +11,8 @@
         android:id="@+id/nav_gallery"
         android:title="갤러리"
         android:icon="@drawable/ic_gallery"/>
+    <item
+        android:id="@+id/nav_settings"
+        android:title="설정"
+        android:icon="@drawable/ic_settings"/>
 </menu>

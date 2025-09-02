@@ -8,6 +8,9 @@ import android.os.Build
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 
+// 앱에서 필요한 권한들을 한 곳에서 관리하는 유틸리티
+// 마이크 / 카메라 / 위치 / 알림 권한 체크 & 요청
+
 object PermissionUtils {
 
     // 개별/통합 요청 코드
@@ -16,7 +19,9 @@ object PermissionUtils {
     const val REQ_ALL    = 1100
     const val REQ_POST_NOTI = 1200
 
-    /** -------- 권한 보유 여부 체크 -------- */
+    //권한 보유 여부 체크
+    // 마이크 & 카메라 권한 보유 여부 확인
+    // 안드로이드 13 이상에서만 알림 권한 체크
     fun hasMicPermission(ctx: Context): Boolean =
         ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) ==
                 PackageManager.PERMISSION_GRANTED
@@ -32,7 +37,7 @@ object PermissionUtils {
         } else true
     }
 
-    /** -------- 개별 요청 -------- */
+    //개별 요청
     fun requestMicPermission(activity: Activity) {
         ActivityCompat.requestPermissions(
             activity,
@@ -59,9 +64,9 @@ object PermissionUtils {
         }
     }
 
-    /** -------- 통합 요청 (앱 초기 진입 등) --------
-     *  Manifest 전용: FOREGROUND_SERVICE_MICROPHONE는 런타임 요청 X
-     */
+    // 앱 첫 실행 시 한번에 권한 요청
+    // 마이크 / 카메라 / 위치 / 알림
+    // 다 허용되면 onGranted() 콜백 실행
     fun checkAndRequestPermissions(
         activity: Activity,
         onGranted: () -> Unit,
@@ -95,9 +100,8 @@ object PermissionUtils {
         }
     }
 
-    /** -------- 결과 처리 통합 헬퍼 --------
-     *  Activity/Fragment의 onRequestPermissionsResult에서 호출
-     */
+    // Activity/Fragment의 onRequestPermissionsResult에서 호출
+    // 결과 배열 확인 후 모두 허용되면 onGranted(), 아니면 onDenied()
     fun handlePermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -118,7 +122,7 @@ object PermissionUtils {
         }
     }
 
-    /** -------- 특정 기능 직전 보강: 마이크 필수 -------- */
+    // STT 시작 직전에 마이크 권한이 없으면 즉시 요청
     fun ensureMicPermissionOrRequest(
         activity: Activity,
         onGranted: () -> Unit,
